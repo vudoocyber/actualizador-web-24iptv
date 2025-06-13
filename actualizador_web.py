@@ -1,3 +1,4 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 from ftplib import FTP
@@ -12,9 +13,9 @@ URL_FUENTE = "https://www.kaelustvsoporte.com/"
 SELECTOR_CSS_CONTENIDO = "div.sqs-block-content" # ¡ESTE ES UN EJEMPLO, DEBES AJUSTARLO!
 
 # Datos de tu servidor FTP
-FTP_HOST = "ftp.tudominio.com"
-FTP_USUARIO = "tu_usuario_ftp"
-FTP_CONTRASENA = "tu_contrasena_ftp" # Recomendación de seguridad más abajo
+FTP_HOST = os.getenv('FTP_HOST')
+FTP_USUARIO = os.getenv('FTP_USUARIO')
+FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/" # Ruta en el servidor donde va el archivo
 
 # Nombre del archivo local y remoto
