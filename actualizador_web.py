@@ -1,4 +1,4 @@
-# === INICIO DEL CÓDIGO COMPLETO Y CORREGIDO para actualizador_web.py ===
+# === INICIO DEL CÓDIGO FINAL, DEFINITIVO Y CORREGIDO para actualizador_web.py ===
 
 import requests
 from bs4 import BeautifulSoup
@@ -24,7 +24,9 @@ def aplicar_reglas_html(texto_crudo):
         linea = linea.strip()
         if not linea:
             continue
-        if REGEX_EMOJI.search(linea):
+        
+        # Ajuste para que "WWE Wrestling" también sea un título h3
+        if "WWE Wrestling" in linea or REGEX_EMOJI.search(linea):
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
             resultado_html += f"<p>{linea}</p><br /><br />\n"
@@ -32,57 +34,58 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PRINCIPAL QUE ORQUESTA TODO ---
+# --- 3. FUNCIÓN PRINCIPAL (Lógica del "Ancla y Contenedor") ---
 def main():
     print("Iniciando proceso de actualización automática...")
-
-    # --- INICIO DEL PRIMER BLOQUE TRY/EXCEPT: EXTRACCIÓN ---
-    # Este bloque intenta extraer los datos y maneja cualquier error en el proceso.
     try:
         print(f"1. Extrayendo datos de {URL_FUENTE}...")
         respuesta = requests.get(URL_FUENTE, timeout=20)
         respuesta.raise_for_status()
         soup = BeautifulSoup(respuesta.content, 'html.parser')
         
-        marcador_texto = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
-        marcadores = soup.find_all(string=lambda t: t and marcador_texto in t)
-        if len(marcadores) < 2:
-            raise ValueError(f"ERROR CRÍTICO: No se encontraron los dos marcadores de emojis. Hallados: {len(marcadores)}")
+        # --- LÓGICA FINAL BASADA EN ENCONTRAR EL BLOQUE CONTENEDOR ---
+        print("Buscando el bloque de contenido usando el emoji de fútbol como ancla...")
+        
+        # 1. Buscamos el primer texto que contenga un emoji de fútbol para usarlo como 'ancla'.
+        ancla = soup.find(string=lambda text: text and "⚽️" in text)
+        
+        if not ancla:
+            raise ValueError("ERROR CRÍTICO: No se encontró el emoji ancla (⚽️) en la página para localizar el bloque.")
+        
+        # 2. Subimos en la jerarquía del HTML para encontrar el 'bloque' contenedor principal.
+        # La estructura suele ser: ancla(texto) -> span -> p -> div (el bloque que queremos)
+        bloque_contenido = ancla.parent.parent.parent
+        
+        # 3. Verificación de seguridad para asegurar que encontramos un bloque <div>
+        if not bloque_contenido or bloque_contenido.name != 'div':
+             raise ValueError("ERROR: No se pudo aislar el bloque <div> contenedor a partir del ancla. La estructura pudo cambiar.")
 
-        nodo_de_partida = marcadores[0].parent.parent
-        print("Punto de partida correcto encontrado. Recopilando contenido...")
-        lineas_deseadas = []
-        for elemento in nodo_de_partida.find_next_siblings():
-            if marcador_texto in elemento.get_text():
-                print("Marcador de fin encontrado. Deteniendo recopilación.")
-                break
-            texto_elemento = elemento.get_text(separator='\n', strip=True)
-            if texto_elemento:
-                lineas_deseadas.append(texto_elemento)
-        if not lineas_deseadas:
-            raise ValueError("ERROR: No se encontró contenido entre los marcadores con la lógica corregida.")
-        texto_extraido_filtrado = "\n".join(lineas_deseadas)
-        print("Datos extraídos y filtrados correctamente.")
+        print("Bloque de contenido principal aislado. Extrayendo todo el texto de este bloque.")
+        
+        # 4. Extraemos TODO el texto que está dentro de ese bloque, manteniendo saltos de línea.
+        texto_extraido_filtrado = bloque_contenido.get_text(separator='\n', strip=True)
+
+        if not texto_extraido_filtrado:
+            raise ValueError("ERROR: El bloque de contenido aislado parece estar vacío.")
+
+        print("Datos extraídos correctamente con el método de ancla y contenedor.")
+
     except Exception as e:
-        # Si algo en el bloque 'try' de arriba falla, se ejecuta este código.
         print(f"ERROR FATAL en la extracción: {e}")
-        return # Detiene la ejecución del script.
-    # --- FIN DEL PRIMER BLOQUE TRY/EXCEPT ---
+        return
 
-    print("2. Transformando datos al formato HTML requerido...")
+    print("2. Transformando datos al formato HTML...")
     contenido_html_final = aplicar_reglas_html(texto_extraido_filtrado)
     
     print(f"3. Guardando resultado en el archivo temporal '{NOMBRE_ARCHIVO_HTML}'...")
     with open(NOMBRE_ARCHIVO_HTML, 'w', encoding='utf-8') as f:
         f.write(contenido_html_final)
-    print("Archivo temporal creado exitosamente.")
+    print("Archivo temporal creado.")
 
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
         return
 
-    # --- INICIO DEL SEGUNDO BLOQUE TRY/EXCEPT: FTP ---
-    # Este bloque intenta subir el archivo y maneja cualquier error de conexión o subida.
     try:
         print(f"4. Conectando al servidor FTP en {FTP_HOST}...")
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
@@ -92,13 +95,11 @@ def main():
                 ftp.storbinary(f'STOR {NOMBRE_ARCHIVO_HTML}', file)
             print("¡Subida por FTP completada exitosamente!")
     except Exception as e:
-        # Si algo en el bloque 'try' de FTP falla, se ejecuta este código.
         print(f"ERROR FATAL durante la subida por FTP: {e}")
-    # --- FIN DEL SEGUNDO BLOQUE TRY/EXCEPT ---
 
 # --- PUNTO DE ENTRADA DEL SCRIPT ---
 if __name__ == "__main__":
     main()
     print("--- Proceso finalizado ---")
 
-# === FIN DEL CÓDIGO COMPLETO Y CORREGIDO para actualizador_web.py ===
+# === FIN DEL CÓDIGO FINAL, DEFINITIVO Y CORREGIDO para actualizador_web.py ===
