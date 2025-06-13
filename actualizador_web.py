@@ -18,8 +18,8 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/" # Ruta en el servidor donde va el archivo
 
-# Nombre del archivo local y remoto
-NOMBRE_ARCHIVO_HTML = "index.html"
+# Nombre del archivo de contenido local y remoto
+NOMBRE_ARCHIVO_HTML = "programacion.html"
 
 # --- 2. LÓGICA DE TRANSFORMACIÓN (TUS REGLAS) ---
 def aplicar_reglas_html(texto_crudo):
