@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup
 import re
 import os
 from ftplib import FTP
+from datetime import datetime
+
 
 # --- 1. CONFIGURACIÓN GLOBAL ---
 URL_FUENTE = "https://www.kaelustvsoporte.com/"
@@ -15,25 +17,38 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 
 # --- 2. FUNCIÓN DE TRANSFORMACIÓN HTML ---
+# --- FUNCIÓN DE TRANSFORMACIÓN HTML (ACTUALIZADA) ---
 def aplicar_reglas_html(texto_crudo):
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
     lineas = texto_crudo.strip().split('\n')
+    
+    # Obtenemos el año actual dinámicamente
+    year_actual = datetime.now().year
+    
     for linea in lineas:
         linea = linea.strip()
         if not linea:
             continue
         
-        # Ajuste para que "WWE Wrestling" también sea un título h3
-        if "WWE Wrestling" in linea or REGEX_EMOJI.search(linea):
+        # --- NUEVA CONDICIÓN PARA EL TÍTULO PRINCIPAL ---
+        # Si la línea comienza con "Eventos Deportivos", le aplicamos el formato especial.
+        if linea.startswith("Eventos Deportivos"):
+            # Separamos el título constante del resto de la fecha
+            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
+            # Construimos el nuevo formato HTML
+            resultado_html += f"<h2>Eventos Deportivos, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
+        
+        # El resto de las reglas se mantienen igual
+        elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea):
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
             resultado_html += f"<p>{linea}</p><br /><br />\n"
         else:
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
+            
     return resultado_html
-
 # --- 3. FUNCIÓN PRINCIPAL (Lógica del "Ancla y Contenedor") ---
 def main():
     print("Iniciando proceso de actualización automática...")
