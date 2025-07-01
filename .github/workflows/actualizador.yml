@@ -1,16 +1,9 @@
-# === INICIO DEL CÓDIGO ACTUALIZADO para actualizador.yml ===
 
 name: Actualizar Programacion Web Diariamente
 
 on:
-  # Disparador 1: Se ejecuta automáticamente según un horario.
   schedule:
-    # --- HORARIO ACTUALIZADO ---
-    # Se ejecuta a las 10:00, 14:00 y 18:00 UTC.
-    # Esto corresponde a las 4:00 AM, 8:00 AM y 12:00 PM en tu zona horaria (CST, UTC-6).
     - cron: '0 10,14,18 * * *'
-  
-  # Disparador 2: Permite ejecutarlo manualmente desde la pestaña "Actions".
   workflow_dispatch:
 
 jobs:
@@ -32,9 +25,12 @@ jobs:
 
       - name: Ejecutar script de actualizacion y subida
         env:
+
+          URL_FUENTE: ${{ secrets.URL_FUENTE }}
+          NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
+          NOMBRE_ARCHIVO_MENSAJE: ${{ secrets.NOMBRE_ARCHIVO_MENSAJE }}
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
           FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
         run: python actualizador_web.py
 
-# === FIN DEL CÓDIGO ACTUALIZADO para actualizador.yml ===
