@@ -3,8 +3,9 @@ name: Actualizar Programacion Web Diariamente
 
 on:
   schedule:
-    - cron: '0 8,12,16,20 * * *
-    
+
+    - cron: '0 8,12,16,20 * * *'
+  
   workflow_dispatch:
 
 jobs:
@@ -26,7 +27,7 @@ jobs:
 
       - name: Ejecutar script de actualizacion y subida
         env:
-
+          # Pasa TODOS los secretos al script como variables de entorno.
           URL_FUENTE: ${{ secrets.URL_FUENTE }}
           NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
           NOMBRE_ARCHIVO_MENSAJE: ${{ secrets.NOMBRE_ARCHIVO_MENSAJE }}
@@ -35,3 +36,4 @@ jobs:
           FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
         run: python actualizador_web.py
 
+# === FIN DEL CÓDIGO ACTUALIZADO para actualizador.yml ===
