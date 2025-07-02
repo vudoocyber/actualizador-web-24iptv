@@ -1,15 +1,16 @@
-
 import requests
 from bs4 import BeautifulSoup
 import re
 import os
 from ftplib import FTP
 from datetime import datetime
+import json ### NUEVO ###
 
 # --- 1. CONFIGURACIÓN GLOBAL (Leída desde los Secrets de GitHub) ---
 URL_FUENTE = os.getenv('URL_FUENTE')
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE')
+NOMBRE_ARCHIVO_JSON = 'events.json' ### NUEVO ###
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
@@ -17,7 +18,7 @@ RUTA_REMOTA_FTP = "/public_html/"
 
 # --- 2. FUNCIÓN DE TRANSFORMACIÓN HTML (sin cambios) ---
 def aplicar_reglas_html(texto_crudo):
-    # (Esta función se queda exactamente igual que en la versión anterior)
+    # (Esta función se queda exactamente igual)
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
@@ -40,7 +41,7 @@ def aplicar_reglas_html(texto_crudo):
 
 # --- 3. FUNCIÓN PARA CREAR MENSAJE (sin cambios) ---
 def crear_mensaje_whatsapp(texto_crudo):
-    # (Esta función se queda exactamente igual que en la versión anterior)
+    # (Esta función se queda exactamente igual)
     print("Generando mensaje para WhatsApp en formato HTML...")
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -60,10 +61,78 @@ def crear_mensaje_whatsapp(texto_crudo):
     print("Mensaje en formato HTML generado.")
     return mensaje_html_final
 
-# --- 4. FUNCIÓN PRINCIPAL (con validación de variables) ---
+### NUEVA FUNCIÓN ###
+# --- 4. FUNCIÓN PARA CREAR EL JSON DE EVENTOS ---
+def crear_json_eventos(texto_crudo):
+    print("Generando archivo JSON para el nuevo diseño web...")
+    datos_json = {
+        "fecha_actualizacion": datetime.now().isoformat(),
+        "guia": []
+    }
+    evento_actual = None
+    partido_actual = None
+    lineas = texto_crudo.strip().split('\n')
+    
+    REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
+    PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
+
+    for linea in lineas:
+        linea = linea.strip()
+        if not linea or linea.startswith("Eventos Deportivos"):
+            continue
+
+        if REGEX_EMOJI.search(linea):
+            if evento_actual:
+                datos_json["guia"].append(evento_actual)
+            
+            emoji_match = REGEX_EMOJI.search(linea)
+            emoji = emoji_match.group(0) if emoji_match else ""
+            nombre_evento = REGEX_EMOJI.sub('', linea).strip()
+            
+            evento_actual = {
+                "evento_principal": nombre_evento,
+                "icono": emoji,
+                "detalle_evento": "",
+                "partidos": []
+            }
+        elif any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
+            if partido_actual:
+                partido_actual["horarios"] = linea
+                # Asumimos que los canales son la última parte que se añade
+                if " y Categoria " in linea:
+                    horarios_raw, canales_raw = linea.split(" por ", 1)
+                    canales_full, categoria = canales_raw.rsplit(" y Categoria ", 1)
+                    partido_actual["horarios"] = horarios_raw
+                    partido_actual["canales"] = [c.strip() for c in canales_full.split(',')]
+                    partido_actual["categoria"] = categoria.strip()
+                elif " por " in linea:
+                    horarios_raw, canales_raw = linea.split(" por ", 1)
+                    partido_actual["horarios"] = horarios_raw
+                    partido_actual["canales"] = [c.strip() for c in canales_raw.split(',')]
+        else:
+            if evento_actual:
+                # Si no es un horario, puede ser un detalle del evento o un nuevo partido
+                if not evento_actual["partidos"] and not evento_actual["detalle_evento"]:
+                     evento_actual["detalle_evento"] = linea
+                else:
+                    partido_actual = {
+                        "descripcion": linea,
+                        "horarios": "",
+                        "canales": [],
+                        "categoria": ""
+                    }
+                    evento_actual["partidos"].append(partido_actual)
+    
+    if evento_actual:
+        datos_json["guia"].append(evento_actual)
+    
+    print("Archivo JSON generado correctamente.")
+    return json.dumps(datos_json, indent=2, ensure_ascii=False)
+
+
+# --- 5. FUNCIÓN PRINCIPAL (MODIFICADA) ---
 def main():
     print("Iniciando proceso de actualización automática...")
-    # Validamos que todas las variables de configuración se cargaron correctamente
     if not all([URL_FUENTE, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE]):
         print("ERROR CRÍTICO: Faltan una o más variables de configuración (URL_FUENTE, NOMBRES DE ARCHIVOS). Revisa los Secrets de GitHub.")
         return
@@ -85,6 +154,7 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
+    # --- Lógica original (sin cambios) ---
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
     print(f"Guardando '{NOMBRE_ARCHIVO_PROGRAMACION}'...")
     with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f:
@@ -94,8 +164,14 @@ def main():
     print(f"Guardando '{NOMBRE_ARCHIVO_MENSAJE}'...")
     with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f:
         f.write(contenido_mensaje_whatsapp)
+
+    # --- Nueva lógica para JSON (se ejecuta en paralelo) ---
+    contenido_json = crear_json_eventos(texto_extraido_filtrado)
+    print(f"Guardando '{NOMBRE_ARCHIVO_JSON}'...")
+    with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f:
+        f.write(contenido_json)
     
-    print("Archivos temporales creados.")
+    print("Archivos temporales creados (HTML y JSON).")
 
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
@@ -105,12 +181,20 @@ def main():
         print(f"Subiendo archivos al servidor FTP en {FTP_HOST}...")
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.cwd(RUTA_REMOTA_FTP)
+            
+            # Subida de archivos originales
             with open(NOMBRE_ARCHIVO_PROGRAMACION, 'rb') as file:
                 print(f"Subiendo '{NOMBRE_ARCHIVO_PROGRAMACION}'...")
                 ftp.storbinary(f'STOR {NOMBRE_ARCHIVO_PROGRAMACION}', file)
             with open(NOMBRE_ARCHIVO_MENSAJE, 'rb') as file:
                 print(f"Subiendo '{NOMBRE_ARCHIVO_MENSAJE}'...")
                 ftp.storbinary(f'STOR {NOMBRE_ARCHIVO_MENSAJE}', file)
+            
+            # ### NUEVO: Subida del archivo JSON ###
+            with open(NOMBRE_ARCHIVO_JSON, 'rb') as file:
+                print(f"Subiendo '{NOMBRE_ARCHIVO_JSON}'...")
+                ftp.storbinary(f'STOR {NOMBRE_ARCHIVO_JSON}', file)
+                
             print("¡Subida de todos los archivos completada exitosamente!")
     except Exception as e:
         print(f"ERROR FATAL durante la subida por FTP: {e}")
