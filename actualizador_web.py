@@ -16,7 +16,7 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 
-# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO ---
+# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO (CORREGIDA) ---
 def aplicar_reglas_html(texto_crudo):
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
@@ -59,87 +59,84 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON CON LÓGICA DE PARSEO FINAL Y ROBUSTA ---
+# --- 4. LÓGICA DE PARSEO FINAL Y ROBUSTA ---
 def crear_json_eventos(texto_crudo):
     datos_json = { "fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": [] }
     lineas = texto_crudo.strip().split('\n')
-    evento_actual = None
-    buffer_descripcion = [] # Guarda líneas de detalle antes de un horario
     
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
-
+    
+    bloques_evento = []
+    bloque_actual = []
     for linea in lineas:
         linea = linea.strip()
         if not linea or "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea: continue
-        
         if "Eventos Deportivos" in linea:
             datos_json["titulo_guia"] = linea
             continue
-
-        es_titulo_evento = REGEX_EMOJI.search(linea) or "Evento BOX" in linea
-        es_linea_horario = any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS)
-
-        if es_titulo_evento:
-            if evento_actual: datos_json["eventos"].append(evento_actual)
-            evento_actual = { "evento_principal": linea, "detalle_evento": "", "partidos": [] }
-            buffer_descripcion.clear()
         
-        elif es_linea_horario:
-            if evento_actual:
-                partido = {}
-                descripcion, horarios, canales_raw = "", "", ""
-                canales = []
+        if (REGEX_EMOJI.search(linea) or "Evento BOX" in linea) and bloque_actual:
+            bloques_evento.append(bloque_actual)
+            bloque_actual = [linea]
+        else:
+            bloque_actual.append(linea)
+    if bloque_actual: bloques_evento.append(bloque_actual)
 
-                # Lógica para separar descripción de horario
-                frases_split = [r'\s+a las\s+', r'\s+apartir de las\s+']
-                base_descripcion = linea
-                base_horarios_canales = ""
+    for bloque in bloques_evento:
+        evento_json = { "evento_principal": bloque[0], "detalle_evento": "", "partidos": [] }
+        contenido = bloque[1:]
+        
+        grupos_partido = []
+        grupo_actual = []
+        for linea in contenido:
+            grupo_actual.append(linea)
+            if any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
+                grupos_partido.append(grupo_actual)
+                grupo_actual = []
+        if grupo_actual: # Lo que sobra es el detalle general del evento
+            evento_json["detalle_evento"] = " ".join(grupo_actual).strip()
+            
+        for grupo in grupos_partido:
+            partido = {"detalle_partido": "", "descripcion": "", "horarios": "", "canales": []}
+            linea_horario = grupo[-1]
+            detalles_descripcion = grupo[:-1]
 
-                for frase in frases_split:
-                    if re.search(frase, linea, re.IGNORECASE):
-                        partes = re.split(frase, linea, 1, re.IGNORECASE)
-                        base_descripcion = partes[0]
-                        base_horarios_canales = partes[1]
-                        break
-                
-                # Si no se partió, es que no tenía "a las", etc.
-                if not base_horarios_canales:
-                    match_horario = re.search(r'\d.*(?:Este|Centro|Pacífico)', linea)
-                    if match_horario:
-                        pos_inicio = match_horario.start()
-                        base_descripcion = linea[:pos_inicio].strip()
-                        base_horarios_canales = linea[pos_inicio:]
-                    else:
-                        base_horarios_canales = linea # Es un evento de una línea
-                
-                # Separar horarios de canales
-                if " por " in base_horarios_canales:
-                    horarios, canales_raw = base_horarios_canales.split(" por ", 1)
-                    canales_raw = canales_raw.replace(" y ", ", ")
-                    canales = [c.strip() for c in canales_raw.split(',')]
-                else:
-                    horarios = base_horarios_canales
-
-                descripcion_final = " ".join(buffer_descripcion + [base_descripcion]).strip()
-                
-                partido["descripcion"] = descripcion_final
+            # Separar descripción y horario de la última línea
+            frases_split = r'\s+a las\s+|\s+a partir de las\s+'
+            partes = re.split(frases_split, linea_horario, 1, re.IGNORECASE)
+            
+            desc_linea = partes[0]
+            horarios_linea = partes[1] if len(partes) > 1 else ""
+            
+            if not horarios_linea: # Si no se partió, buscar por patrón de hora
+                match_horario = re.search(r'\d.*(?:am|pm|AM|PM)', linea_horario)
+                if match_horario:
+                    pos_inicio = match_horario.start()
+                    desc_linea = linea_horario[:pos_inicio].strip()
+                    horarios_linea = linea_horario[pos_inicio:]
+            
+            # Separar horarios y canales
+            if " por " in horarios_linea:
+                horarios, canales_raw = horarios_linea.split(" por ", 1)
+                canales_raw = canales_raw.replace(" y ", ", ")
+                partido["canales"] = [c.strip() for c in canales_raw.split(',')]
                 partido["horarios"] = horarios.strip()
-                partido["canales"] = canales
-                
-                evento_actual["partidos"].append(partido)
-                buffer_descripcion.clear()
+            else:
+                partido["horarios"] = horarios_linea.strip()
 
-        else: # Es un detalle/descripción que precede a un horario
-            buffer_descripcion.append(linea)
-
-    if evento_actual: datos_json["eventos"].append(evento_actual)
-    datos_json["eventos"] = [e for e in datos_json["eventos"] if e.get("partidos")]
-    
+            partido["descripcion"] = desc_linea
+            partido["detalle_partido"] = " ".join(detalles_descripcion).strip()
+            
+            evento_json["partidos"].append(partido)
+        
+        if evento_json["partidos"]:
+            datos_json["eventos"].append(evento_json)
+            
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
 
-# --- 6. FUNCIÓN PRINCIPAL ---
+# --- 5. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
