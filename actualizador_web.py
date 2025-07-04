@@ -7,22 +7,18 @@ from datetime import datetime
 import json
 
 # --- 1. CONFIGURACIÓN ---
-# Se leen todas las configuraciones desde los Secrets de GitHub para máxima flexibilidad.
 URL_FUENTE = os.getenv('URL_FUENTE')
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 
-# Usamos los nombres de archivo desde los secrets, con un valor por defecto si no existen.
 NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 
-
-# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO (CON CORRECCIÓN UTF-8) ---
+# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO ---
 def aplicar_reglas_html(texto_crudo):
-    # Esta función no necesita cambios, ya funciona bien.
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
@@ -43,10 +39,8 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CON CORRECCIÓN UTF-8) ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
-    # Esta función no necesita cambios.
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
@@ -66,10 +60,8 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-
-# --- 4. NUEVA FUNCIÓN MEJORADA PARA CREAR EL JSON ---
+# --- 4. FUNCIÓN FINAL PARA CREAR EL JSON ---
 def crear_json_eventos(texto_crudo):
-    # Lógica mejorada para ser más precisa.
     datos_json = { "fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": [] }
     lineas = texto_crudo.strip().split('\n')
     evento_actual = None
@@ -79,17 +71,17 @@ def crear_json_eventos(texto_crudo):
 
     for linea in lineas:
         linea = linea.strip()
-        if not linea or "Eventos Deportivos" in linea or "Kaelus Soporte" in linea:
-            if "Eventos Deportivos" in linea and "Julio" in linea: # Asegurarse de que sea la línea de la fecha
-                 datos_json["titulo_guia"] = linea
+        if not linea or "Kaelus Soporte" in linea:
+            continue
+        
+        if "Eventos Deportivos" in linea:
+            datos_json["titulo_guia"] = linea
             continue
 
         if REGEX_EMOJI.search(linea):
             if evento_actual:
-                # Filtrar partidos vacíos antes de guardar
-                evento_actual["partidos"] = [p for p in evento_actual["partidos"] if p.get("descripcion")]
                 datos_json["eventos"].append(evento_actual)
-
+            
             emoji_match = REGEX_EMOJI.search(linea)
             icono = emoji_match.group(0) if emoji_match else ""
             nombre_evento = REGEX_EMOJI.sub('', linea).strip()
@@ -97,37 +89,35 @@ def crear_json_eventos(texto_crudo):
             evento_actual = { "evento_principal": nombre_evento, "icono": icono, "detalle_evento": "", "partidos": [] }
         
         elif any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
-            if evento_actual and evento_actual["partidos"]:
-                ultimo_partido = evento_actual["partidos"][-1]
-                
-                # Si el último partido ya tiene horario, es un evento de una sola línea
-                if ultimo_partido.get("horarios"):
-                    # Es un nuevo partido de una sola línea
+            if evento_actual:
+                # Si no hay partidos aún, o si el último partido ya tiene horario,
+                # esta línea es un nuevo partido de una sola línea.
+                if not evento_actual["partidos"] or evento_actual["partidos"][-1].get("horarios"):
                     nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
                     evento_actual["partidos"].append(nuevo_partido)
-                else:
-                    # Es el horario del último partido descrito
-                    ultimo_partido["horarios"] = linea
-                    if " por " in linea:
-                        partes = linea.split(" por ", 1)
-                        ultimo_partido["horarios"] = partes[0]
-                        ultimo_partido["canales"] = [c.strip() for c in partes[1].split(',')]
+                
+                # Asigna este horario al ÚLTIMO partido que se haya añadido
+                ultimo_partido = evento_actual["partidos"][-1]
+                ultimo_partido["horarios"] = linea
+                if " por " in linea:
+                    partes = linea.split(" por ", 1)
+                    ultimo_partido["horarios"] = partes[0]
+                    canales_raw = partes[1].replace(" y Categoria ", ", Categoria ")
+                    ultimo_partido["canales"] = [c.strip() for c in canales_raw.split(',')]
 
         else:
             if evento_actual:
+                # Si aún no hay partidos, es un detalle del evento
                 if not evento_actual["partidos"]:
-                    # Es un detalle del evento
-                    evento_actual["detalle_evento"] = f"{evento_actual['detalle_evento']} {linea}".strip()
-                else:
-                    # Es la descripción de un nuevo partido
+                    evento_actual["detalle_evento"] = f"{evento_actual.get('detalle_evento', '')} {linea}".strip()
+                else: # Es la descripción de un nuevo partido
                     nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
                     evento_actual["partidos"].append(nuevo_partido)
     
     if evento_actual:
-        evento_actual["partidos"] = [p for p in evento_actual["partidos"] if p.get("descripcion")]
         datos_json["eventos"].append(evento_actual)
 
-    # Limpiar eventos que no tengan partidos
+    # Limpieza final: eliminar eventos que quedaron sin partidos
     datos_json["eventos"] = [e for e in datos_json["eventos"] if e.get("partidos")]
     
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
@@ -146,11 +136,9 @@ def main():
         respuesta.raise_for_status()
         soup = BeautifulSoup(respuesta.content, 'html.parser')
 
-        # --- LÓGICA DE EXTRACCIÓN CORREGIDA ---
-        # Buscamos el div que contiene el texto de los eventos
         bloque_contenido = soup.find('div', {'id': 'comp-khhybsn1'})
         if not bloque_contenido:
-            raise ValueError("No se encontró el contenedor de eventos con ID 'comp-khhybsn1'. La estructura de la página pudo haber cambiado.")
+            raise ValueError("No se encontró el contenedor de eventos con ID 'comp-khhybsn1'.")
         
         texto_extraido_filtrado = bloque_contenido.get_text(separator='\n', strip=True)
         print("Datos extraídos correctamente.")
@@ -181,7 +169,7 @@ def main():
     print("4. Subiendo archivos al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
-            ftp.set_pasv(True) # Usar modo pasivo para mayor compatibilidad
+            ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
             for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE]:
                 with open(nombre_archivo, 'rb') as file:
