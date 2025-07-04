@@ -16,7 +16,7 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 
-# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO (CORREGIDA) ---
+# --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO ---
 def aplicar_reglas_html(texto_crudo):
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
@@ -30,7 +30,6 @@ def aplicar_reglas_html(texto_crudo):
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             resultado_html += f"<h2>Eventos Deportivos, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
-        # CORRECCIÓN: Identifica correctamente las líneas de título de evento
         elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
@@ -41,7 +40,6 @@ def aplicar_reglas_html(texto_crudo):
 
 # --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
-    # Sin cambios necesarios aquí
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
@@ -61,12 +59,12 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON CON LÓGICA DE PARSEO FINAL ---
+# --- 4. FUNCIÓN JSON CON LÓGICA DE PARSEO FINAL Y ROBUSTA ---
 def crear_json_eventos(texto_crudo):
     datos_json = { "fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": [] }
     lineas = texto_crudo.strip().split('\n')
     evento_actual = None
-    detalle_partido_actual = "" # Variable para guardar detalles como el estadio
+    buffer_descripcion = [] # Guarda líneas de detalle antes de un horario
     
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
@@ -79,44 +77,61 @@ def crear_json_eventos(texto_crudo):
             datos_json["titulo_guia"] = linea
             continue
 
-        if REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
+        es_titulo_evento = REGEX_EMOJI.search(linea) or "Evento BOX" in linea
+        es_linea_horario = any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS)
+
+        if es_titulo_evento:
             if evento_actual: datos_json["eventos"].append(evento_actual)
             evento_actual = { "evento_principal": linea, "detalle_evento": "", "partidos": [] }
-            detalle_partido_actual = ""
+            buffer_descripcion.clear()
         
-        elif any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
+        elif es_linea_horario:
             if evento_actual:
                 partido = {}
-                descripcion, horarios = "", ""
+                descripcion, horarios, canales_raw = "", "", ""
                 canales = []
 
-                # CORRECCIÓN: Separa la descripción de las frases de horario
-                split_frases = r'\s+a las\s+|\s+apartir de las\s+'
-                partes_descripcion = re.split(split_frases, linea, 1)
-                
-                descripcion_raw = partes_descripcion[0]
-                horarios_raw = partes_descripcion[1] if len(partes_descripcion) > 1 else ''
+                # Lógica para separar descripción de horario
+                frases_split = [r'\s+a las\s+', r'\s+apartir de las\s+']
+                base_descripcion = linea
+                base_horarios_canales = ""
 
-                if " por " in horarios_raw:
-                    horarios, canales_raw = horarios_raw.split(" por ", 1)
+                for frase in frases_split:
+                    if re.search(frase, linea, re.IGNORECASE):
+                        partes = re.split(frase, linea, 1, re.IGNORECASE)
+                        base_descripcion = partes[0]
+                        base_horarios_canales = partes[1]
+                        break
+                
+                # Si no se partió, es que no tenía "a las", etc.
+                if not base_horarios_canales:
+                    match_horario = re.search(r'\d.*(?:Este|Centro|Pacífico)', linea)
+                    if match_horario:
+                        pos_inicio = match_horario.start()
+                        base_descripcion = linea[:pos_inicio].strip()
+                        base_horarios_canales = linea[pos_inicio:]
+                    else:
+                        base_horarios_canales = linea # Es un evento de una línea
+                
+                # Separar horarios de canales
+                if " por " in base_horarios_canales:
+                    horarios, canales_raw = base_horarios_canales.split(" por ", 1)
                     canales_raw = canales_raw.replace(" y ", ", ")
                     canales = [c.strip() for c in canales_raw.split(',')]
                 else:
-                    horarios = horarios_raw
+                    horarios = base_horarios_canales
+
+                descripcion_final = " ".join(buffer_descripcion + [base_descripcion]).strip()
                 
-                partido["descripcion"] = (detalle_partido_actual + " " + descripcion_raw).strip()
+                partido["descripcion"] = descripcion_final
                 partido["horarios"] = horarios.strip()
                 partido["canales"] = canales
                 
                 evento_actual["partidos"].append(partido)
-                detalle_partido_actual = "" # Limpiar el detalle después de usarlo
+                buffer_descripcion.clear()
 
-        else: # Si no tiene emoji ni horario, es un detalle de evento o de partido
-            if evento_actual:
-                if not evento_actual["partidos"]:
-                    evento_actual["detalle_evento"] += f" {linea}".strip()
-                else:
-                    detalle_partido_actual += f" {linea}".strip()
+        else: # Es un detalle/descripción que precede a un horario
+            buffer_descripcion.append(linea)
 
     if evento_actual: datos_json["eventos"].append(evento_actual)
     datos_json["eventos"] = [e for e in datos_json["eventos"] if e.get("partidos")]
@@ -124,7 +139,7 @@ def crear_json_eventos(texto_crudo):
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
 
-# --- 5. FUNCIÓN PRINCIPAL ---
+# --- 6. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
