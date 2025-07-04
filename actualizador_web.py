@@ -7,17 +7,22 @@ from datetime import datetime
 import json
 
 # --- 1. CONFIGURACIÓN ---
+# Se leen todas las configuraciones desde los Secrets de GitHub para máxima flexibilidad.
 URL_FUENTE = os.getenv('URL_FUENTE')
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
+
+# Usamos los nombres de archivo desde los secrets, con un valor por defecto si no existen.
 NOMBRE_ARCHIVO_JSON = 'events.json'
-NOMBRE_ARCHIVO_PROGRAMACION = 'programacion.html'
-NOMBRE_ARCHIVO_MENSAJE = 'mensaje_wsp.html'
+NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
+NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
+
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO (CON CORRECCIÓN UTF-8) ---
 def aplicar_reglas_html(texto_crudo):
+    # Esta función no necesita cambios, ya funciona bien.
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
@@ -38,8 +43,10 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
+
 # --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CON CORRECCIÓN UTF-8) ---
 def crear_mensaje_whatsapp(texto_crudo):
+    # Esta función no necesita cambios.
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
@@ -59,65 +66,93 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
+
 # --- 4. NUEVA FUNCIÓN MEJORADA PARA CREAR EL JSON ---
 def crear_json_eventos(texto_crudo):
+    # Lógica mejorada para ser más precisa.
     datos_json = { "fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": [] }
     lineas = texto_crudo.strip().split('\n')
     evento_actual = None
+    
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
 
     for linea in lineas:
         linea = linea.strip()
-        if not linea or "Eventos Deportivos," in linea:
-            if "Eventos Deportivos," in linea:
-                 fecha_texto = linea.split(",")[1].strip()
-                 datos_json["titulo_guia"] = f"Guía de Eventos del {fecha_texto}"
+        if not linea or "Eventos Deportivos" in linea or "Kaelus Soporte" in linea:
+            if "Eventos Deportivos" in linea and "Julio" in linea: # Asegurarse de que sea la línea de la fecha
+                 datos_json["titulo_guia"] = linea
             continue
 
         if REGEX_EMOJI.search(linea):
-            if evento_actual: datos_json["eventos"].append(evento_actual)
+            if evento_actual:
+                # Filtrar partidos vacíos antes de guardar
+                evento_actual["partidos"] = [p for p in evento_actual["partidos"] if p.get("descripcion")]
+                datos_json["eventos"].append(evento_actual)
+
             emoji_match = REGEX_EMOJI.search(linea)
             icono = emoji_match.group(0) if emoji_match else ""
             nombre_evento = REGEX_EMOJI.sub('', linea).strip()
+            
             evento_actual = { "evento_principal": nombre_evento, "icono": icono, "detalle_evento": "", "partidos": [] }
         
         elif any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
             if evento_actual and evento_actual["partidos"]:
                 ultimo_partido = evento_actual["partidos"][-1]
-                if ultimo_partido["horarios"]:
-                    ultimo_partido["descripcion"] += f" {linea}"
+                
+                # Si el último partido ya tiene horario, es un evento de una sola línea
+                if ultimo_partido.get("horarios"):
+                    # Es un nuevo partido de una sola línea
+                    nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
+                    evento_actual["partidos"].append(nuevo_partido)
                 else:
+                    # Es el horario del último partido descrito
                     ultimo_partido["horarios"] = linea
                     if " por " in linea:
                         partes = linea.split(" por ", 1)
                         ultimo_partido["horarios"] = partes[0]
                         ultimo_partido["canales"] = [c.strip() for c in partes[1].split(',')]
+
         else:
             if evento_actual:
-                if not evento_actual["partidos"] and not evento_actual["detalle_evento"]:
-                    evento_actual["detalle_evento"] += f"{linea} "
+                if not evento_actual["partidos"]:
+                    # Es un detalle del evento
+                    evento_actual["detalle_evento"] = f"{evento_actual['detalle_evento']} {linea}".strip()
                 else:
+                    # Es la descripción de un nuevo partido
                     nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
                     evento_actual["partidos"].append(nuevo_partido)
     
-    if evento_actual: datos_json["eventos"].append(evento_actual)
+    if evento_actual:
+        evento_actual["partidos"] = [p for p in evento_actual["partidos"] if p.get("descripcion")]
+        datos_json["eventos"].append(evento_actual)
+
+    # Limpiar eventos que no tengan partidos
+    datos_json["eventos"] = [e for e in datos_json["eventos"] if e.get("partidos")]
+    
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
+
 
 # --- 5. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
-    if not os.getenv('URL_FUENTE'):
+    if not URL_FUENTE:
         print("ERROR CRÍTICO: El secret URL_FUENTE no está configurado.")
         return
 
     try:
         print("1. Extrayendo datos de la fuente...")
-        respuesta = requests.get(os.getenv('URL_FUENTE'), timeout=20)
+        respuesta = requests.get(URL_FUENTE, timeout=20)
         respuesta.raise_for_status()
-        ancla = BeautifulSoup(respuesta.content, 'html.parser').find(string=lambda text: text and "Eventos Deportivos" in text)
-        if not ancla: raise ValueError("No se encontró el texto 'Eventos Deportivos'.")
-        texto_extraido_filtrado = ancla.parent.get_text(separator='\n', strip=True)
+        soup = BeautifulSoup(respuesta.content, 'html.parser')
+
+        # --- LÓGICA DE EXTRACCIÓN CORREGIDA ---
+        # Buscamos el div que contiene el texto de los eventos
+        bloque_contenido = soup.find('div', {'id': 'comp-khhybsn1'})
+        if not bloque_contenido:
+            raise ValueError("No se encontró el contenedor de eventos con ID 'comp-khhybsn1'. La estructura de la página pudo haber cambiado.")
+        
+        texto_extraido_filtrado = bloque_contenido.get_text(separator='\n', strip=True)
         print("Datos extraídos correctamente.")
     except Exception as e:
         print(f"ERROR FATAL en la extracción: {e}")
@@ -134,7 +169,7 @@ def main():
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
         with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
         with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_mensaje_whatsapp)
-        print("Archivos locales guardados en UTF-8.")
+        print(f"Archivos locales guardados: {NOMBRE_ARCHIVO_JSON}, {NOMBRE_ARCHIVO_PROGRAMACION}, {NOMBRE_ARCHIVO_MENSAJE}.")
     except Exception as e:
         print(f"Error al guardar archivos locales: {e}")
         return
@@ -146,6 +181,7 @@ def main():
     print("4. Subiendo archivos al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
+            ftp.set_pasv(True) # Usar modo pasivo para mayor compatibilidad
             ftp.cwd(RUTA_REMOTA_FTP)
             for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE]:
                 with open(nombre_archivo, 'rb') as file:
