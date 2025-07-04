@@ -12,7 +12,6 @@ FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
-
 NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
@@ -60,7 +59,7 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN FINAL PARA CREAR EL JSON ---
+# --- 4. FUNCIÓN JSON CON LÓGICA DE DATOS CORREGIDA ---
 def crear_json_eventos(texto_crudo):
     datos_json = { "fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": [] }
     lineas = texto_crudo.strip().split('\n')
@@ -71,53 +70,62 @@ def crear_json_eventos(texto_crudo):
 
     for linea in lineas:
         linea = linea.strip()
-        if not linea or "Kaelus Soporte" in linea:
-            continue
+        if not linea or "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea: continue
         
         if "Eventos Deportivos" in linea:
             datos_json["titulo_guia"] = linea
             continue
 
         if REGEX_EMOJI.search(linea):
-            if evento_actual:
-                datos_json["eventos"].append(evento_actual)
-            
-            emoji_match = REGEX_EMOJI.search(linea)
-            icono = emoji_match.group(0) if emoji_match else ""
-            nombre_evento = REGEX_EMOJI.sub('', linea).strip()
-            
-            evento_actual = { "evento_principal": nombre_evento, "icono": icono, "detalle_evento": "", "partidos": [] }
+            if evento_actual: datos_json["eventos"].append(evento_actual)
+            evento_actual = { "evento_principal": linea, "detalle_evento": "", "partidos": [] }
         
         elif any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
             if evento_actual:
-                # Si no hay partidos aún, o si el último partido ya tiene horario,
-                # esta línea es un nuevo partido de una sola línea.
-                if not evento_actual["partidos"] or evento_actual["partidos"][-1].get("horarios"):
-                    nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
-                    evento_actual["partidos"].append(nuevo_partido)
+                partido = {}
+                descripcion = ""
+                horarios = ""
+                canales = []
+
+                # CORRECCIÓN: Separar descripción de partido de la de horarios
+                match_horario = re.search(r'\d.*(?:Este|Centro|Pacífico|partir de las).*', linea)
+                if match_horario:
+                    posicion_inicio_horario = match_horario.start()
+                    descripcion = linea[:posicion_inicio_horario].strip()
+                    horarios_canales_raw = linea[posicion_inicio_horario:]
+                else:
+                    # Caso para eventos de una sola línea sin descripción previa
+                    descripcion = linea
+                    horarios_canales_raw = linea
+
+                if " por " in horarios_canales_raw:
+                    horarios, canales_raw = horarios_canales_raw.split(" por ", 1)
+                    # CORRECCIÓN: Reemplazar " y " por coma para separar canales
+                    canales_raw_corregido = canales_raw.replace(" y ", ", ")
+                    canales = [c.strip() for c in canales_raw_corregido.split(',')]
+                else:
+                    horarios = horarios_canales_raw
                 
-                # Asigna este horario al ÚLTIMO partido que se haya añadido
-                ultimo_partido = evento_actual["partidos"][-1]
-                ultimo_partido["horarios"] = linea
-                if " por " in linea:
-                    partes = linea.split(" por ", 1)
-                    ultimo_partido["horarios"] = partes[0]
-                    canales_raw = partes[1].replace(" y Categoria ", ", Categoria ")
-                    ultimo_partido["canales"] = [c.strip() for c in canales_raw.split(',')]
+                partido["descripcion"] = descripcion
+                partido["horarios"] = horarios
+                partido["canales"] = canales
+                
+                # Asignar al último partido si este no tiene descripción
+                if evento_actual["partidos"] and not evento_actual["partidos"][-1].get("horarios"):
+                    evento_actual["partidos"][-1]["horarios"] = horarios
+                    evento_actual["partidos"][-1]["canales"] = canales
+                else:
+                     evento_actual["partidos"].append(partido)
 
-        else:
+        else: # Si no es título ni horario, es un detalle del evento o del partido
             if evento_actual:
-                # Si aún no hay partidos, es un detalle del evento
                 if not evento_actual["partidos"]:
-                    evento_actual["detalle_evento"] = f"{evento_actual.get('detalle_evento', '')} {linea}".strip()
-                else: # Es la descripción de un nuevo partido
-                    nuevo_partido = { "descripcion": linea, "horarios": "", "canales": [] }
-                    evento_actual["partidos"].append(nuevo_partido)
-    
-    if evento_actual:
-        datos_json["eventos"].append(evento_actual)
+                    evento_actual["detalle_evento"] += f" {linea}".strip()
+                else:
+                    evento_actual["partidos"][-1]["descripcion"] = f"{linea} {evento_actual['partidos'][-1].get('descripcion', '')}".strip()
 
-    # Limpieza final: eliminar eventos que quedaron sin partidos
+    if evento_actual: datos_json["eventos"].append(evento_actual)
+
     datos_json["eventos"] = [e for e in datos_json["eventos"] if e.get("partidos")]
     
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
@@ -125,6 +133,7 @@ def crear_json_eventos(texto_crudo):
 
 # --- 5. FUNCIÓN PRINCIPAL ---
 def main():
+    # ... (El resto de la función main no necesita cambios)
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
         print("ERROR CRÍTICO: El secret URL_FUENTE no está configurado.")
@@ -135,11 +144,9 @@ def main():
         respuesta = requests.get(URL_FUENTE, timeout=20)
         respuesta.raise_for_status()
         soup = BeautifulSoup(respuesta.content, 'html.parser')
-
         bloque_contenido = soup.find('div', {'id': 'comp-khhybsn1'})
         if not bloque_contenido:
             raise ValueError("No se encontró el contenedor de eventos con ID 'comp-khhybsn1'.")
-        
         texto_extraido_filtrado = bloque_contenido.get_text(separator='\n', strip=True)
         print("Datos extraídos correctamente.")
     except Exception as e:
