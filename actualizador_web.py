@@ -12,10 +12,13 @@ FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
+
+# Nombres de los archivos a generar, leídos desde los Secrets de GitHub
 NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
+
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML ANTIGUO ---
 def aplicar_reglas_html(texto_crudo):
@@ -39,7 +42,7 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CORREGIDA) ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -49,7 +52,6 @@ def crear_mensaje_whatsapp(texto_crudo):
         linea = linea.strip()
         if linea.startswith("Eventos Deportivos"):
             fecha_del_dia = linea.replace("Eventos Deportivos ", "").strip()
-        # CORRECCIÓN: Se añade "Evento BOX" para que lo incluya en el mensaje
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
     
@@ -61,7 +63,7 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. LÓGICA DE PARSEO FINAL Y DEFINITIVA ---
+# --- 4. FUNCIÓN FINAL PARA CREAR EL JSON ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
@@ -69,11 +71,13 @@ def crear_json_eventos(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
 
+    # Paso 1: Agrupar líneas por evento principal
     bloques_evento = []
     bloque_actual = []
     for linea in lineas:
         if "Eventos Deportivos" in linea:
-            datos_json["titulo_guia"] = linea
+            if "Julio" in linea or "Agosto" in linea: # Filtro para asegurar que es la línea de fecha
+                datos_json["titulo_guia"] = linea
             continue
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
@@ -85,7 +89,9 @@ def crear_json_eventos(texto_crudo):
             bloque_actual.append(linea)
     if bloque_actual: bloques_evento.append(bloque_actual)
 
+    # Paso 2: Procesar cada bloque de evento
     for bloque in bloques_evento:
+        if not bloque: continue
         evento_json = {"evento_principal": bloque[0], "detalle_evento": "", "partidos": []}
         contenido = bloque[1:]
         
@@ -99,26 +105,28 @@ def crear_json_eventos(texto_crudo):
         
         if grupo_actual: evento_json["detalle_evento"] = " ".join(grupo_actual).strip()
             
+        # Paso 3: Parsear cada grupo de partido
         for grupo in grupos_partido:
+            partido = {"detalle_partido": "", "descripcion": "", "horarios": "", "canales": []}
             linea_horario = grupo.pop()
-            detalles_partido = grupo
-            
-            partido = {"detalle_partido": " ".join(detalles_descripcion).strip(), "descripcion": "", "horarios": "", "canales": []}
-            
+            detalles_previos = grupo
+
             frases_split = r'\s+a las\s+|\s+a partir de las\s+'
             descripcion_raw = linea_horario
             horarios_raw = ""
 
-            if re.search(frases_split, linea_horario, re.IGNORECASE):
-                partes = re.split(frases_split, linea_horario, 1, re.IGNORECASE)
-                descripcion_raw, horarios_raw = partes[0], partes[1]
-            elif re.search(r'\d.*(am|pm|AM|PM)', linea_horario):
-                 match_horario = re.search(r'\d.*(am|pm|AM|PM)', linea_horario)
-                 pos_inicio = match_horario.start()
-                 descripcion_raw = linea_horario[:pos_inicio].strip()
-                 horarios_raw = linea_horario[pos_inicio:]
+            partes_frase = re.split(frases_split, linea_horario, 1, re.IGNORECASE)
+            if len(partes_frase) > 1:
+                descripcion_raw, horarios_raw = partes_frase[0], partes_frase[1]
+            else:
+                match_horario = re.search(r'\d.*(am|pm|AM|PM)', linea_horario)
+                if match_horario:
+                    pos_inicio = match_horario.start()
+                    descripcion_raw = linea_horario[:pos_inicio].strip()
+                    horarios_raw = linea_horario[pos_inicio:]
 
-            partido["descripcion"] = descripcion_raw
+            partido["descripcion"] = descripcion_raw.strip()
+            partido["detalle_partido"] = " ".join(detalles_previos).strip()
             
             if " por " in horarios_raw:
                 horarios, canales_texto = horarios_raw.split(" por ", 1)
@@ -127,12 +135,13 @@ def crear_json_eventos(texto_crudo):
                 partido["canales"] = [c.strip() for c in canales_texto.split(',')]
             else:
                 partido["horarios"] = horarios_raw.strip()
-
+            
             evento_json["partidos"].append(partido)
         
         if evento_json["partidos"]: datos_json["eventos"].append(evento_json)
             
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
+
 
 # --- 5. FUNCIÓN PARA GENERAR EL SITEMAP ---
 def crear_sitemap():
@@ -179,33 +188,4 @@ def main():
     crear_sitemap()
     print("Contenido generado.")
 
-    print("3. Guardando archivos locales...")
-    try:
-        with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
-        with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
-        with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_mensaje_whatsapp)
-        print(f"Archivos locales guardados: {NOMBRE_ARCHIVO_JSON}, {NOMBRE_ARCHIVO_PROGRAMACION}, {NOMBRE_ARCHIVO_MENSAJE}, {NOMBRE_ARCHIVO_SITEMAP}.")
-    except Exception as e:
-        print(f"Error al guardar archivos locales: {e}")
-        return
-
-    if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
-        print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
-        return
-    
-    print("4. Subiendo archivos al servidor FTP...")
-    try:
-        with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
-            ftp.set_pasv(True)
-            ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP]:
-                with open(nombre_archivo, 'rb') as file:
-                    print(f"Subiendo '{nombre_archivo}'...")
-                    ftp.storbinary(f'STOR {nombre_archivo}', file)
-            print("¡Subida de todos los archivos completada exitosamente!")
-    except Exception as e:
-        print(f"ERROR FATAL durante la subida por FTP: {e}")
-
-if __name__ == "__main__":
-    main()
-    print("--- Proceso finalizado ---")
+    print("3. Guard
