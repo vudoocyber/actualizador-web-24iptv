@@ -12,7 +12,6 @@ FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
-
 NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
@@ -61,7 +60,7 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN FINAL PARA CREAR EL JSON ---
+# --- 4. FUNCIÓN JSON CON EXTRACCIÓN DE DATOS PARA SEO ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
@@ -87,7 +86,8 @@ def crear_json_eventos(texto_crudo):
 
     for bloque in bloques_evento:
         if not bloque: continue
-        evento_json = {"evento_principal": bloque[0], "detalle_evento": "", "partidos": []}
+        evento_principal = bloque[0]
+        evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
         contenido = bloque[1:]
         
         grupos_partido = []
@@ -102,9 +102,9 @@ def crear_json_eventos(texto_crudo):
             
         for grupo in grupos_partido:
             linea_horario = grupo.pop()
-            detalles_descripcion = grupo
+            detalles_previos = grupo
             
-            partido = {"detalle_partido": " ".join(detalles_descripcion).strip(), "descripcion": "", "horarios": "", "canales": []}
+            partido = {"detalle_partido": " ".join(detalles_previos).strip(), "descripcion": "", "horarios": "", "canales": [], "competidores": [], "organizador": evento_principal}
             
             frases_split = r'\s+a las\s+|\s+a partir de las\s+'
             descripcion_raw = linea_horario
@@ -122,6 +122,10 @@ def crear_json_eventos(texto_crudo):
 
             partido["descripcion"] = descripcion_raw.strip()
             
+            # Extraer competidores si existe "vs"
+            if " vs " in partido["descripcion"]:
+                partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
+
             if " por " in horarios_raw:
                 horarios, canales_texto = horarios_raw.split(" por ", 1)
                 partido["horarios"] = horarios.strip()
