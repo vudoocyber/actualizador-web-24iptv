@@ -30,7 +30,7 @@ def aplicar_reglas_html(texto_crudo):
         if not linea: continue
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
-            resultado_html += f"<h2>Eventos Deportivos, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
+            resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
         elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
