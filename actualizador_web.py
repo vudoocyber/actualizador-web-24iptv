@@ -31,7 +31,7 @@ def aplicar_reglas_html(texto_crudo):
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
-        elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
+        elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
             resultado_html += f"<p>{linea}</p><br /><br />\n"
@@ -39,14 +39,13 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CORREGIDA) ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
     fecha_del_dia = ""
     separador_emojis = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
-    # --- LÓGICA CORREGIDA PARA SALTOS DE LÍNEA ---
     separador_count = 0
 
     for linea in lineas:
@@ -56,10 +55,8 @@ def crear_mensaje_whatsapp(texto_crudo):
         elif separador_emojis in linea:
             separador_count += 1
             if separador_count == 1:
-                # Al primer separador, le añade un salto de línea DESPUÉS.
                 titulos_con_emoji.append(f"{linea}\n")
             else:
-                # A los siguientes, les añade un salto de línea ANTES.
                 titulos_con_emoji.append(f"\n{linea}")
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
@@ -90,12 +87,14 @@ Dale clic al enlace y entérate de todo en segundos 👇
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON ---
+# --- 4. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN CORREGIDA) ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
+
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
+
     bloques_evento = []
     bloque_actual = []
     for linea in lineas:
@@ -107,17 +106,22 @@ def crear_json_eventos(texto_crudo):
             continue
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
-        if (REGEX_EMOJI.search(linea) or "Evento BOX" in linea) and bloque_actual:
+        
+        # --- ESTA ES LA LÍNEA CORREGIDA ---
+        # Añadimos "WWE Wrestling" como una condición explícita para iniciar un nuevo bloque
+        if ("WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea) and bloque_actual:
             bloques_evento.append(bloque_actual)
             bloque_actual = [linea]
         else:
             bloque_actual.append(linea)
     if bloque_actual: bloques_evento.append(bloque_actual)
+
     for bloque in bloques_evento:
         if not bloque: continue
         evento_principal = bloque[0]
         evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
         contenido = bloque[1:]
+        
         grupos_partido = []
         grupo_actual = []
         for linea in contenido:
@@ -125,14 +129,19 @@ def crear_json_eventos(texto_crudo):
             if any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
                 grupos_partido.append(grupo_actual)
                 grupo_actual = []
+        
         if grupo_actual: evento_json["detalle_evento"] = " ".join(grupo_actual).strip()
+            
         for grupo in grupos_partido:
             linea_horario = grupo.pop()
             detalles_previos = grupo
+            
             partido = {"detalle_partido": " ".join(detalles_previos).strip(), "descripcion": "", "horarios": "", "canales": [], "competidores": [], "organizador": evento_principal}
+            
             frases_split = r'\s+a las\s+|\s+a partir de las\s+'
             descripcion_raw = linea_horario
             horarios_raw = ""
+
             if re.search(frases_split, linea_horario, re.IGNORECASE):
                 partes = re.split(frases_split, linea_horario, 1, re.IGNORECASE)
                 descripcion_raw, horarios_raw = partes[0], partes[1]
@@ -142,9 +151,12 @@ def crear_json_eventos(texto_crudo):
                     pos_inicio = match_horario.start()
                     descripcion_raw = linea_horario[:pos_inicio].strip()
                     horarios_raw = linea_horario[pos_inicio:]
+
             partido["descripcion"] = descripcion_raw.strip()
+            
             if " vs " in partido["descripcion"]:
                 partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
+
             if " por " in horarios_raw:
                 horarios, canales_texto = horarios_raw.split(" por ", 1)
                 partido["horarios"] = horarios.strip()
@@ -152,8 +164,11 @@ def crear_json_eventos(texto_crudo):
                 partido["canales"] = [c.strip() for c in canales_texto.split(',')]
             else:
                 partido["horarios"] = horarios_raw.strip()
+            
             evento_json["partidos"].append(partido)
+        
         if evento_json["partidos"]: datos_json["eventos"].append(evento_json)
+            
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
 # --- 5. FUNCIÓN PARA GENERAR EL SITEMAP ---
