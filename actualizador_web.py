@@ -46,17 +46,21 @@ def crear_mensaje_whatsapp(texto_crudo):
     titulos_con_emoji = []
     fecha_del_dia = ""
     separador_emojis = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
+    # --- LÓGICA CORREGIDA PARA SALTOS DE LÍNEA ---
+    separador_count = 0
 
     for linea in lineas:
         linea = linea.strip()
         if linea.startswith("Eventos Deportivos"):
             fecha_del_dia = linea.replace("Eventos Deportivos ", "").strip()
-        
-        # --- CORRECCIÓN FINAL: LÓGICA DE SALTOS DE LÍNEA ---
-        # Si la línea es un separador, siempre le añade un salto de línea ANTES.
         elif separador_emojis in linea:
-            titulos_con_emoji.append(f"\n{linea}")
-        
+            separador_count += 1
+            if separador_count == 1:
+                # Al primer separador, le añade un salto de línea DESPUÉS.
+                titulos_con_emoji.append(f"{linea}\n")
+            else:
+                # A los siguientes, les añade un salto de línea ANTES.
+                titulos_con_emoji.append(f"\n{linea}")
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
     
@@ -72,6 +76,7 @@ Consulta los horarios y canales de transmisión aquí:
 
 
 📅 *{fecha_formateada}*
+
 {lista_de_titulos}
 
 📱 ¿Listo para no perderte ni un segundo de acción?
@@ -97,7 +102,6 @@ def crear_json_eventos(texto_crudo):
         if "Eventos Deportivos" in linea:
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             year_actual = datetime.now().year
-            # Se añade <br /> para que JS con innerHTML lo pueda interpretar
             titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
             datos_json["titulo_guia"] = titulo_completo_html
             continue
