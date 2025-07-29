@@ -71,11 +71,12 @@ def crear_json_eventos(texto_crudo):
     bloques_evento = []
     bloque_actual = []
     for linea in lineas:
-        # --- ESTA ES LA LÍNEA CORREGIDA ---
         if "Eventos Deportivos" in linea:
-            datos_json["titulo_guia"] = "Eventos Deportivos y Especiales"
+            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
+            year_actual = datetime.now().year
+            titulo_completo = f"Eventos Deportivos y Especiales {fecha_texto} {year_actual}"
+            datos_json["titulo_guia"] = titulo_completo
             continue
-        # --- FIN DE LA CORRECCIÓN ---
 
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
@@ -142,7 +143,6 @@ def crear_json_eventos(texto_crudo):
             
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
-
 # --- 5. FUNCIÓN PARA GENERAR EL SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
@@ -158,7 +158,6 @@ def crear_sitemap():
     with open(NOMBRE_ARCHIVO_SITEMAP, 'w', encoding='utf-8') as f:
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
-
 
 # --- 6. FUNCIÓN PRINCIPAL ---
 def main():
