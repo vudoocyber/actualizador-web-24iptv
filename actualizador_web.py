@@ -28,9 +28,13 @@ def aplicar_reglas_html(texto_crudo):
     for linea in lineas:
         linea = linea.strip()
         if not linea: continue
+        
+        # --- CORRECCIÓN 1: TÍTULO CON SALTO DE LÍNEA ---
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
+            # Se reintroduce el formato con <br> para separar la fecha
             resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
+        
         elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
@@ -45,10 +49,18 @@ def crear_mensaje_whatsapp(texto_crudo):
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
     fecha_del_dia = ""
+    separador_emojis = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
+
     for linea in lineas:
         linea = linea.strip()
         if linea.startswith("Eventos Deportivos"):
             fecha_del_dia = linea.replace("Eventos Deportivos ", "").strip()
+        
+        # --- CORRECCIÓN 3: SALTO DE LÍNEA EN SEPARADORES DE EMOJIS ---
+        elif separador_emojis in linea:
+            # Añade un salto de línea extra ANTES del separador
+            titulos_con_emoji.append(f"\n{linea}")
+        
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
     
@@ -56,18 +68,34 @@ def crear_mensaje_whatsapp(texto_crudo):
     fecha_formateada = f"{fecha_del_dia} de {year_actual}" if fecha_del_dia else f"Hoy, {datetime.now().strftime('%d de %B')}"
     lista_de_titulos = "\n".join(titulos_con_emoji)
     
-    mensaje_texto_plano = f"""🎯 ¡Guía de Eventos Deportivos en Vivo de Hoy! 🏆🔥\n\nConsulta los horarios y canales de transmisión aquí:\n\n👉 https://24hometv.xyz/#horarios\n\n\n📅 *{fecha_formateada}*\n\n{lista_de_titulos}\n\n📱 ¿Listo para no perderte ni un segundo de acción?\n\nDale clic al enlace y entérate de todo en segundos 👇\n\n👉 https://24hometv.xyz/#horarios\n\n⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
+    # --- CORRECCIÓN 2: TEXTO DEL TÍTULO DEL MENSAJE ---
+    mensaje_texto_plano = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
+
+Consulta los horarios y canales de transmisión aquí:
+
+👉 https://24hometv.xyz/#horarios
+
+
+📅 *{fecha_formateada}*
+{lista_de_titulos}
+
+📱 ¿Listo para no perderte ni un segundo de acción?
+
+Dale clic al enlace y entérate de todo en segundos 👇
+
+👉 https://24hometv.xyz/#horarios
+
+⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
+    
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON CON LA CORRECCIÓN APLICADA ---
+# --- 4. FUNCIÓN JSON (sin cambios en esta vuelta) ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
-
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
-
     bloques_evento = []
     bloque_actual = []
     for linea in lineas:
@@ -77,23 +105,19 @@ def crear_json_eventos(texto_crudo):
             titulo_completo = f"Eventos Deportivos y Especiales {fecha_texto} {year_actual}"
             datos_json["titulo_guia"] = titulo_completo
             continue
-
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
-        
         if (REGEX_EMOJI.search(linea) or "Evento BOX" in linea) and bloque_actual:
             bloques_evento.append(bloque_actual)
             bloque_actual = [linea]
         else:
             bloque_actual.append(linea)
     if bloque_actual: bloques_evento.append(bloque_actual)
-
     for bloque in bloques_evento:
         if not bloque: continue
         evento_principal = bloque[0]
         evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
         contenido = bloque[1:]
-        
         grupos_partido = []
         grupo_actual = []
         for linea in contenido:
@@ -101,19 +125,14 @@ def crear_json_eventos(texto_crudo):
             if any(keyword in linea for keyword in PALABRAS_CLAVE_HORARIOS):
                 grupos_partido.append(grupo_actual)
                 grupo_actual = []
-        
         if grupo_actual: evento_json["detalle_evento"] = " ".join(grupo_actual).strip()
-            
         for grupo in grupos_partido:
             linea_horario = grupo.pop()
             detalles_previos = grupo
-            
             partido = {"detalle_partido": " ".join(detalles_previos).strip(), "descripcion": "", "horarios": "", "canales": [], "competidores": [], "organizador": evento_principal}
-            
             frases_split = r'\s+a las\s+|\s+a partir de las\s+'
             descripcion_raw = linea_horario
             horarios_raw = ""
-
             if re.search(frases_split, linea_horario, re.IGNORECASE):
                 partes = re.split(frases_split, linea_horario, 1, re.IGNORECASE)
                 descripcion_raw, horarios_raw = partes[0], partes[1]
@@ -123,12 +142,9 @@ def crear_json_eventos(texto_crudo):
                     pos_inicio = match_horario.start()
                     descripcion_raw = linea_horario[:pos_inicio].strip()
                     horarios_raw = linea_horario[pos_inicio:]
-
             partido["descripcion"] = descripcion_raw.strip()
-            
             if " vs " in partido["descripcion"]:
                 partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
-
             if " por " in horarios_raw:
                 horarios, canales_texto = horarios_raw.split(" por ", 1)
                 partido["horarios"] = horarios.strip()
@@ -136,14 +152,11 @@ def crear_json_eventos(texto_crudo):
                 partido["canales"] = [c.strip() for c in canales_texto.split(',')]
             else:
                 partido["horarios"] = horarios_raw.strip()
-            
             evento_json["partidos"].append(partido)
-        
         if evento_json["partidos"]: datos_json["eventos"].append(evento_json)
-            
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
-# --- 5. FUNCIÓN PARA GENERAR EL SITEMAP ---
+# --- 5. FUNCIÓN PARA GENERAR EL SITEMAP (sin cambios) ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -159,13 +172,12 @@ def crear_sitemap():
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
-# --- 6. FUNCIÓN PRINCIPAL ---
+# --- 6. FUNCIÓN PRINCIPAL (sin cambios) ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
         print("ERROR CRÍTICO: El secret URL_FUENTE no está configurado.")
         return
-
     try:
         print("1. Extrayendo datos de la fuente...")
         respuesta = requests.get(URL_FUENTE, timeout=20)
@@ -179,14 +191,12 @@ def main():
     except Exception as e:
         print(f"ERROR FATAL en la extracción: {e}")
         return
-
     print("2. Generando contenido para los 4 archivos...")
     contenido_json = crear_json_eventos(texto_extraido_filtrado)
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
     contenido_mensaje_whatsapp = crear_mensaje_whatsapp(texto_extraido_filtrado)
     crear_sitemap()
     print("Contenido generado.")
-
     print("3. Guardando archivos locales...")
     try:
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
@@ -196,11 +206,9 @@ def main():
     except Exception as e:
         print(f"Error al guardar archivos locales: {e}")
         return
-
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
         return
-    
     print("4. Subiendo archivos al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
