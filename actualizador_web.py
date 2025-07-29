@@ -46,27 +46,22 @@ def crear_mensaje_whatsapp(texto_crudo):
     titulos_con_emoji = []
     fecha_del_dia = ""
     separador_emojis = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
-    # --- CORRECCIÓN 3: LÓGICA DE SALTOS DE LÍNEA ---
-    separador_encontrado_count = 0
 
     for linea in lineas:
         linea = linea.strip()
         if linea.startswith("Eventos Deportivos"):
             fecha_del_dia = linea.replace("Eventos Deportivos ", "").strip()
+        
+        # --- CORRECCIÓN FINAL: LÓGICA DE SALTOS DE LÍNEA ---
+        # Si la línea es un separador, siempre le añade un salto de línea ANTES.
         elif separador_emojis in linea:
-            separador_encontrado_count += 1
-            if separador_encontrado_count == 1:
-                # Después del primer separador, añade un salto de línea
-                titulos_con_emoji.append(f"{linea}\n")
-            else:
-                # Antes de los siguientes separadores, añade un salto de línea
-                titulos_con_emoji.append(f"\n{linea}")
+            titulos_con_emoji.append(f"\n{linea}")
+        
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
     
     year_actual = datetime.now().year
     fecha_formateada = f"{fecha_del_dia} de {year_actual}" if fecha_del_dia else f"Hoy, {datetime.now().strftime('%d de %B')}"
-    # Se usa .join sin separador extra porque ya los añadimos a la lista
     lista_de_titulos = "\n".join(titulos_con_emoji)
     
     mensaje_texto_plano = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
@@ -90,7 +85,7 @@ Dale clic al enlace y entérate de todo en segundos 👇
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON (CORREGIDA) ---
+# --- 4. FUNCIÓN JSON ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
@@ -100,10 +95,9 @@ def crear_json_eventos(texto_crudo):
     bloque_actual = []
     for linea in lineas:
         if "Eventos Deportivos" in linea:
-            # --- CORRECCIÓN 1: TÍTULO EN JSON CON SALTO DE LÍNEA ---
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             year_actual = datetime.now().year
-            # Insertamos HTML <br /> para que la página index lo interprete
+            # Se añade <br /> para que JS con innerHTML lo pueda interpretar
             titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
             datos_json["titulo_guia"] = titulo_completo_html
             continue
