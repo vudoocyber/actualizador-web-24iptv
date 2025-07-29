@@ -1,5 +1,3 @@
-# === INICIO DEL CÓDIGO COMPLETO, LIMPIO Y CORREGIDO ===
-
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -20,7 +18,6 @@ NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.h
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
-# Esta es la función que hemos corregido para que el título se muestre correctamente.
 def aplicar_reglas_html(texto_crudo):
     resultado_html = ""
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
@@ -30,15 +27,10 @@ def aplicar_reglas_html(texto_crudo):
     
     for linea in lineas:
         linea = linea.strip()
-        if not linea:
-            continue
-        
-        # La lógica corregida para el título principal
+        if not linea: continue
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
-        
-        # El resto de las reglas
         elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
@@ -68,9 +60,8 @@ def crear_mensaje_whatsapp(texto_crudo):
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON CON EXTRACCIÓN DE DATOS PARA SEO ---
+# --- 4. FUNCIÓN JSON CON LA CORRECCIÓN APLICADA ---
 def crear_json_eventos(texto_crudo):
-    # (Esta función se mantiene igual, solo se ha limpiado la indentación)
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
 
@@ -80,9 +71,12 @@ def crear_json_eventos(texto_crudo):
     bloques_evento = []
     bloque_actual = []
     for linea in lineas:
+        # --- ESTA ES LA LÍNEA CORREGIDA ---
         if "Eventos Deportivos" in linea:
-            datos_json["titulo_guia"] = linea
+            datos_json["titulo_guia"] = "Eventos Deportivos y Especiales"
             continue
+        # --- FIN DE LA CORRECCIÓN ---
+
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
         
@@ -178,7 +172,6 @@ def main():
         respuesta = requests.get(URL_FUENTE, timeout=20)
         respuesta.raise_for_status()
         soup = BeautifulSoup(respuesta.content, 'html.parser')
-        # Se mantiene la extracción por ID, que es más precisa.
         bloque_contenido = soup.find('div', {'id': 'comp-khhybsn1'})
         if not bloque_contenido:
             raise ValueError("No se encontró el contenedor de eventos con ID 'comp-khhybsn1'.")
@@ -225,5 +218,3 @@ def main():
 if __name__ == "__main__":
     main()
     print("--- Proceso finalizado ---")
-
-# === FIN DEL CÓDIGO ===
