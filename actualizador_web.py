@@ -28,13 +28,9 @@ def aplicar_reglas_html(texto_crudo):
     for linea in lineas:
         linea = linea.strip()
         if not linea: continue
-        
-        # --- CORRECCIÓN 1: TÍTULO CON SALTO DE LÍNEA ---
         if linea.startswith("Eventos Deportivos"):
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
-            # Se reintroduce el formato con <br> para separar la fecha
             resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
-        
         elif REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             resultado_html += f"<h3>{linea}</h3><br /><br />\n"
         elif any(keyword in linea for keyword in PALABRAS_CLAVE):
@@ -43,32 +39,36 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CORREGIDA) ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
     titulos_con_emoji = []
     fecha_del_dia = ""
     separador_emojis = "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳"
+    # --- CORRECCIÓN 3: LÓGICA DE SALTOS DE LÍNEA ---
+    separador_encontrado_count = 0
 
     for linea in lineas:
         linea = linea.strip()
         if linea.startswith("Eventos Deportivos"):
             fecha_del_dia = linea.replace("Eventos Deportivos ", "").strip()
-        
-        # --- CORRECCIÓN 3: SALTO DE LÍNEA EN SEPARADORES DE EMOJIS ---
         elif separador_emojis in linea:
-            # Añade un salto de línea extra ANTES del separador
-            titulos_con_emoji.append(f"\n{linea}")
-        
+            separador_encontrado_count += 1
+            if separador_encontrado_count == 1:
+                # Después del primer separador, añade un salto de línea
+                titulos_con_emoji.append(f"{linea}\n")
+            else:
+                # Antes de los siguientes separadores, añade un salto de línea
+                titulos_con_emoji.append(f"\n{linea}")
         elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
             titulos_con_emoji.append(linea)
     
     year_actual = datetime.now().year
     fecha_formateada = f"{fecha_del_dia} de {year_actual}" if fecha_del_dia else f"Hoy, {datetime.now().strftime('%d de %B')}"
+    # Se usa .join sin separador extra porque ya los añadimos a la lista
     lista_de_titulos = "\n".join(titulos_con_emoji)
     
-    # --- CORRECCIÓN 2: TEXTO DEL TÍTULO DEL MENSAJE ---
     mensaje_texto_plano = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
 
 Consulta los horarios y canales de transmisión aquí:
@@ -90,7 +90,7 @@ Dale clic al enlace y entérate de todo en segundos 👇
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN JSON (sin cambios en esta vuelta) ---
+# --- 4. FUNCIÓN JSON (CORREGIDA) ---
 def crear_json_eventos(texto_crudo):
     datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
@@ -100,10 +100,12 @@ def crear_json_eventos(texto_crudo):
     bloque_actual = []
     for linea in lineas:
         if "Eventos Deportivos" in linea:
+            # --- CORRECCIÓN 1: TÍTULO EN JSON CON SALTO DE LÍNEA ---
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             year_actual = datetime.now().year
-            titulo_completo = f"Eventos Deportivos y Especiales {fecha_texto} {year_actual}"
-            datos_json["titulo_guia"] = titulo_completo
+            # Insertamos HTML <br /> para que la página index lo interprete
+            titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
+            datos_json["titulo_guia"] = titulo_completo_html
             continue
         if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
             continue
@@ -156,7 +158,7 @@ def crear_json_eventos(texto_crudo):
         if evento_json["partidos"]: datos_json["eventos"].append(evento_json)
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
-# --- 5. FUNCIÓN PARA GENERAR EL SITEMAP (sin cambios) ---
+# --- 5. FUNCIÓN PARA GENERAR EL SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -172,7 +174,7 @@ def crear_sitemap():
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
-# --- 6. FUNCIÓN PRINCIPAL (sin cambios) ---
+# --- 6. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
