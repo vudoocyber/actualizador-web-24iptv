@@ -88,7 +88,8 @@ Dale clic al enlace y entérate de todo en segundos 👇
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
-# --- FUNCIÓN PARA COMUNICARSE CON GEMINI (VERSIÓN OPTIMIZADA) ---
+
+# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (VERSIÓN DE DIAGNÓSTICO) ---
 def obtener_ranking_eventos(texto_crudo):
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
@@ -106,18 +107,15 @@ def obtener_ranking_eventos(texto_crudo):
             linea_limpia = linea.strip()
             if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
                 try:
-                    # Extraemos solo la descripción del evento, antes de la hora
                     descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
                     eventos_para_analizar.append(descripcion.strip())
                 except:
                     eventos_para_analizar.append(linea_limpia)
-            elif "Pelea Estelar" in linea_limpia: # Añadimos casos especiales que no tienen horario
+            elif "Pelea Estelar" in linea_limpia:
                  eventos_para_analizar.append(linea_limpia)
 
+        lista_texto_plano = "\n".join(set(eventos_para_analizar))
 
-        lista_texto_plano = "\n".join(set(eventos_para_analizar)) # Usamos set() para eliminar duplicados
-
-        # --- INICIO DEL NUEVO PROMPT MEJORADO ---
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias culturales y de entretenimiento.
         Tu tarea es analizar la siguiente lista de eventos, que puede incluir deportes, conciertos, estrenos de TV o transmisiones en vivo.
@@ -135,21 +133,32 @@ def obtener_ranking_eventos(texto_crudo):
         LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
-        # --- FIN DEL NUEVO PROMPT MEJORADO ---
+
+        # --- INICIO DE LA SECCIÓN DE DIAGNÓSTICO ---
+        print("\n--- INICIANDO DIAGNÓSTICO DE GEMINI ---")
+        print("Lista de eventos enviada a Gemini:")
+        print(lista_texto_plano)
+        print("--------------------------------------\n")
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
+        
+        print("--- Respuesta CRUDA de Gemini: ---")
+        # Usamos repr() para ver caracteres invisibles como saltos de línea (\n)
+        print(repr(response.text))
+        print("--- Fin de la Respuesta CRUDA ---\n")
+
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini (mejorado) recibido: {ranking_limpio}")
+        print(f"Ranking limpio procesado: {ranking_limpio}")
+        print("--- FIN DEL DIAGNÓSTICO ---\n")
         return ranking_limpio
 
     except Exception as e:
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
         return []
 
-# --- 5. FUNCIÓN JSON REFACTORIZADA Y CORREGIDA ---
+# --- 5. FUNCIÓN JSON ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
-    
     def parsear_linea_partido(linea_partido):
         partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
         linea_limpia = linea_partido.strip()
