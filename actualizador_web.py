@@ -89,7 +89,7 @@ Dale clic al enlace y entérate de todo en segundos 👇
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (VERSIÓN DE DIAGNÓSTICO) ---
+# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (CON LÓGICA MEJORADA) ---
 def obtener_ranking_eventos(texto_crudo):
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
@@ -101,16 +101,21 @@ def obtener_ranking_eventos(texto_crudo):
         model = genai.GenerativeModel('gemini-1.5-flash')
 
         lineas = texto_crudo.strip().split('\n')
-        PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
+        PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las", " por "]
         eventos_para_analizar = []
         for linea in lineas:
             linea_limpia = linea.strip()
+            # Si es una línea de horario, intentamos extraer solo la descripción
             if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
                 try:
+                    # Extraemos la parte ANTES de la hora
                     descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
+                    # Extraemos la parte ANTES de los canales
+                    descripcion = descripcion.split(" por ")[0]
                     eventos_para_analizar.append(descripcion.strip())
                 except:
-                    eventos_para_analizar.append(linea_limpia)
+                    continue # Ignoramos si no se puede procesar
+            # Añadimos casos especiales que no tienen horario en la misma línea
             elif "Pelea Estelar" in linea_limpia:
                  eventos_para_analizar.append(linea_limpia)
 
@@ -134,30 +139,17 @@ def obtener_ranking_eventos(texto_crudo):
         {lista_texto_plano}
         """
 
-        # --- INICIO DE LA SECCIÓN DE DIAGNÓSTICO ---
-        print("\n--- INICIANDO DIAGNÓSTICO DE GEMINI ---")
-        print("Lista de eventos enviada a Gemini:")
-        print(lista_texto_plano)
-        print("--------------------------------------\n")
-
         response = model.generate_content(prompt, request_options={'timeout': 120})
-        
-        print("--- Respuesta CRUDA de Gemini: ---")
-        # Usamos repr() para ver caracteres invisibles como saltos de línea (\n)
-        print(repr(response.text))
-        print("--- Fin de la Respuesta CRUDA ---\n")
-
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking limpio procesado: {ranking_limpio}")
-        print("--- FIN DEL DIAGNÓSTICO ---\n")
+        print(f"Ranking de Gemini recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
         return []
 
-# --- 5. FUNCIÓN JSON ---
+# --- 5. FUNCIÓN JSON (CON LÓGICA DE COINCIDENCIA CORREGIDA) ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
     def parsear_linea_partido(linea_partido):
         partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
@@ -247,10 +239,12 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
     eventos_relevantes_especiales = []
     if ranking_relevancia:
         print("Creando tarjetas especiales para eventos relevantes...")
-        for desc_relevante in ranking_relevancia:
+        for desc_relevante_larga in ranking_relevancia:
             for evento in lista_eventos_original:
                 for partido in evento["partidos"]:
-                    if desc_relevante in partido["descripcion"]:
+                    # --- ESTA ES LA LÍNEA DE LÓGICA CORREGIDA ---
+                    # Comprobamos si el nombre corto del partido está DENTRO de la respuesta larga de Gemini.
+                    if partido["descripcion"] and partido["descripcion"] in desc_relevante_larga:
                         tarjeta_especial = {
                             "evento_principal": evento["evento_principal"],
                             "partido_relevante": {
