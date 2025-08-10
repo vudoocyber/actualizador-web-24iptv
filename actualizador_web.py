@@ -88,46 +88,59 @@ Dale clic al enlace y entérate de todo en segundos 👇
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
-
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI ---
+# --- FUNCIÓN PARA COMUNICARSE CON GEMINI (VERSIÓN OPTIMIZADA) ---
 def obtener_ranking_eventos(texto_crudo):
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
         return []
-    print("Contactando a la IA de Gemini para obtener el ranking de relevancia...")
+
+    print("Contactando a la IA de Gemini para obtener el ranking de relevancia optimizado...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        
+
         lineas = texto_crudo.strip().split('\n')
         PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las"]
-        partidos_para_analizar = []
+        eventos_para_analizar = []
         for linea in lineas:
             linea_limpia = linea.strip()
             if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
                 try:
+                    # Extraemos solo la descripción del evento, antes de la hora
                     descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
-                    partidos_para_analizar.append(descripcion.strip())
+                    eventos_para_analizar.append(descripcion.strip())
                 except:
-                    partidos_para_analizar.append(linea_limpia)
+                    eventos_para_analizar.append(linea_limpia)
+            elif "Pelea Estelar" in linea_limpia: # Añadimos casos especiales que no tienen horario
+                 eventos_para_analizar.append(linea_limpia)
 
-        lista_texto_plano = "\n".join(partidos_para_analizar)
 
+        lista_texto_plano = "\n".join(set(eventos_para_analizar)) # Usamos set() para eliminar duplicados
+
+        # --- INICIO DEL NUEVO PROMPT MEJORADO ---
         prompt = f"""
-        Actúa como un analista experto en tendencias deportivas globales. A continuación te doy una lista de partidos, peleas y eventos deportivos del día.
-        Basándote en la relevancia global, popularidad en búsquedas web y चर्चा en redes sociales, identifica los 3 eventos más importantes.
+        Actúa como un curador de contenido experto y analista de tendencias culturales y de entretenimiento.
+        Tu tarea es analizar la siguiente lista de eventos, que puede incluir deportes, conciertos, estrenos de TV o transmisiones en vivo.
+        Tu objetivo es identificar los 3 eventos de mayor interés general para el público.
 
-        Devuelve ÚNICAMENTE la descripción exacta de los 3 eventos que identificaste, en orden del más relevante al menos relevante. Por ejemplo: 'Bills vs Giants' o 'Pelea Estelar Dolidze vs Hernandez'.
-        Cada descripción debe estar en una nueva línea. No añadas introducciones, explicaciones, numeración, ni ningún otro texto.
+        Para determinar la relevancia, considera los siguientes factores en orden de importancia:
+        1. Volumen de Búsqueda Actual: ¿Qué eventos están generando más búsquedas en Google y otros buscadores en este momento?
+        2. Impacto en Redes Sociales: ¿Cuáles están generando más conversación, hashtags o expectación en plataformas como X (Twitter), Instagram y TikTok?
+        3. Relevancia Cultural y Mediática: ¿Hay eventos con gran impacto cultural, como una pelea de campeonato, un clásico del fútbol, un concierto importante o el final de una serie popular?
 
-        LISTA DE EVENTOS:
+        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos, cada uno en una línea nueva.
+        Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con una de las líneas que te proporcioné.
+        NO incluyas números, viñetas (- o *), comillas, explicaciones, o cualquier texto introductorio. El formato debe ser texto plano y limpio.
+
+        LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
+        # --- FIN DEL NUEVO PROMPT MEJORADO ---
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (mejorado) recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
