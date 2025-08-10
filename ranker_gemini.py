@@ -2,10 +2,10 @@ import requests
 import json
 import os
 from ftplib import FTP
-from datetime import datetime, timezone, timedelta  # <-- Se añaden timedelta y timezone
+from datetime import datetime, timezone, timedelta
 import google.generativeai as genai
 
-# --- 1. CONFIGURACIÓN (sin cambios) ---
+# --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
 NOMBRE_ARCHIVO_SALIDA = "eventos-relevantes.json"
 FTP_HOST = os.getenv('FTP_HOST')
@@ -14,30 +14,25 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (ACTUALIZADA CON CONTEXTO DE TIEMPO) ---
+# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (PROMPT ACTUALIZADO) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return []
 
-    print("Contactando a la IA de Gemini con contexto de tiempo...")
+    print("Contactando a la IA de Gemini con nueva regla de exclusión...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # --- NUEVA LÓGICA DE TIEMPO ---
-        # Definimos la zona horaria del Centro de México (CST es UTC-6)
         cst_offset = timezone(timedelta(hours=-6))
         hora_actual_cst = datetime.now(cst_offset)
-        # Formateamos la fecha y hora para que la IA la entienda claramente
         hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p CST')
         print(f"Hora actual para el análisis: {hora_formateada_cst}")
 
-        # Extraemos una lista de descripciones y horarios para el análisis
         eventos_para_analizar = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
-                # Unimos la descripción y el horario para darle contexto completo a la IA
                 linea_completa = f"{partido.get('descripcion', '')} {partido.get('horarios', '')}"
                 eventos_para_analizar.append(linea_completa.strip())
         
@@ -47,18 +42,18 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT MEJORADO CON REGLA DE TIEMPO ---
+        # --- PROMPT MEJORADO CON REGLA DE EXCLUSIÓN ---
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
 
         La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
 
-        Tu tarea es analizar la siguiente lista de eventos. Debes identificar los 3 eventos de mayor interés general que AÚN NO HAYAN FINALIZADO.
+        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes para esta audiencia específica, siguiendo estas reglas en orden estricto:
 
-        Para determinar la relevancia, sigue estas reglas ESTRICTAMENTE:
-        1.  **REGLA CRÍTICA DE TIEMPO:** Ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente según la hora actual proporcionada. Prioriza eventos que están por iniciar o en curso. Si un partido de fútbol empezó hace más de 3 horas, ya terminó; si un partido de NFL empezó hace más de 4 horas, ya terminó. Usa el sentido común.
-        2.  **Alto Interés Regional:** De los eventos restantes, da máxima prioridad a los de Liga MX, NFL, MLB, NBA y peleas de boxeo importantes.
-        3.  **Relevancia Cultural General:** Considera también conciertos, estrenos de TV o eventos de cultura pop muy esperados.
+        1.  **REGLA CRÍTICA DE TIEMPO:** Ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente. Prioriza eventos que están por iniciar o en curso.
+        2.  **REGLA CRÍTICA DE EXCLUSIÓN:** Los partidos de ligas o torneos femeninos (ej. Liga MX Femenil, NWSL, Copa América Femenil, Tour de Francia Femenil) NO deben ser considerados para el top 3, a menos que se trate de un evento de magnitud excepcional como la final de una Copa del Mundo.
+        3.  **Alto Interés Regional:** De los eventos restantes, da máxima prioridad a los de Liga MX, NFL, MLB, NBA y peleas de boxeo importantes.
+        4.  **Relevancia Cultural General:** Considera también conciertos, estrenos de TV o eventos de cultura pop muy esperados.
 
         La salida debe ser exclusivamente el texto de la descripción de los 3 eventos seleccionados (sin la parte del horario), cada uno en una nueva línea, en orden del más al menos relevante.
         Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con la descripción de uno de los eventos en la lista.
@@ -71,7 +66,7 @@ def obtener_ranking_eventos(lista_eventos):
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini (sensible al tiempo) recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (con exclusión) recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
@@ -103,14 +98,11 @@ def main():
 
     print("3. Filtrando los eventos relevantes de la lista original...")
     eventos_relevantes = []
-    # Usamos una lista para evitar añadir el mismo partido dos veces si la IA lo repitiera
     descripciones_ya_anadidas = set()
     for desc_relevante in ranking:
         encontrado = False
         for evento in lista_eventos_original:
             for partido in evento.get("partidos", []):
-                # Comprobamos que la descripción del partido esté en la respuesta de la IA
-                # y que no lo hayamos añadido ya
                 if desc_relevante in partido.get("descripcion", "") and partido.get("descripcion") not in descripciones_ya_anadidas:
                     evento_relevante = {
                         "evento_principal": evento["evento_principal"],
