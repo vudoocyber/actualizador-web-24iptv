@@ -89,67 +89,64 @@ Dale clic al enlace y entérate de todo en segundos 👇
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     return mensaje_html_final
 
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (CON LÓGICA MEJORADA) ---
+# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (PROMPT OPTIMIZADO) ---
 def obtener_ranking_eventos(texto_crudo):
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
         return []
 
-    print("Contactando a la IA de Gemini para obtener el ranking de relevancia optimizado...")
+    print("Contactando a la IA de Gemini con prompt optimizado para audiencia México/USA...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-
+        
         lineas = texto_crudo.strip().split('\n')
         PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las", " por "]
         eventos_para_analizar = []
         for linea in lineas:
             linea_limpia = linea.strip()
-            # Si es una línea de horario, intentamos extraer solo la descripción
             if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
                 try:
-                    # Extraemos la parte ANTES de la hora
                     descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
-                    # Extraemos la parte ANTES de los canales
                     descripcion = descripcion.split(" por ")[0]
                     eventos_para_analizar.append(descripcion.strip())
                 except:
-                    continue # Ignoramos si no se puede procesar
-            # Añadimos casos especiales que no tienen horario en la misma línea
+                    continue
             elif "Pelea Estelar" in linea_limpia:
                  eventos_para_analizar.append(linea_limpia)
 
         lista_texto_plano = "\n".join(set(eventos_para_analizar))
 
+        # --- INICIO DEL PROMPT OPTIMIZADO ---
         prompt = f"""
-        Actúa como un curador de contenido experto y analista de tendencias culturales y de entretenimiento.
-        Tu tarea es analizar la siguiente lista de eventos, que puede incluir deportes, conciertos, estrenos de TV o transmisiones en vivo.
-        Tu objetivo es identificar los 3 eventos de mayor interés general para el público.
+        Actúa como un analista experto en tendencias de entretenimiento para una audiencia de México y Estados Unidos (USA).
+        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes para esta audiencia específica.
 
-        Para determinar la relevancia, considera los siguientes factores en orden de importancia:
-        1. Volumen de Búsqueda Actual: ¿Qué eventos están generando más búsquedas en Google y otros buscadores en este momento?
-        2. Impacto en Redes Sociales: ¿Cuáles están generando más conversación, hashtags o expectación en plataformas como X (Twitter), Instagram y TikTok?
-        3. Relevancia Cultural y Mediática: ¿Hay eventos con gran impacto cultural, como una pelea de campeonato, un clásico del fútbol, un concierto importante o el final de una serie popular?
+        Para determinar la relevancia, prioriza de la siguiente manera:
+        1.  **Alto Interés Regional:** Da máxima prioridad a eventos de la Liga MX, NFL, MLB, NBA y peleas de boxeo importantes (especialmente con peleadores mexicanos o de alto perfil en USA).
+        2.  **Relevancia Cultural General:** Considera conciertos de artistas populares en la región, estrenos de series o películas muy esperadas y eventos de la cultura pop.
+        3.  **Popularidad en Búsquedas y Redes Sociales:** Evalúa qué eventos están generando más conversación y búsquedas en México y USA.
 
-        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos, cada uno en una línea nueva.
+        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos, cada uno en una línea nueva, en orden del más al menos relevante.
         Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con una de las líneas que te proporcioné.
-        NO incluyas números, viñetas (- o *), comillas, explicaciones, o cualquier texto introductorio. El formato debe ser texto plano y limpio.
+        NO incluyas números, viñetas, comillas, explicaciones, o cualquier texto introductorio.
 
         LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
+        # --- FIN DEL PROMPT OPTIMIZADO ---
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (optimizado) recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
         return []
 
-# --- 5. FUNCIÓN JSON (CON LÓGICA DE COINCIDENCIA CORREGIDA) ---
+# --- 5. FUNCIÓN JSON ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
     def parsear_linea_partido(linea_partido):
         partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
@@ -239,12 +236,10 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
     eventos_relevantes_especiales = []
     if ranking_relevancia:
         print("Creando tarjetas especiales para eventos relevantes...")
-        for desc_relevante_larga in ranking_relevancia:
+        for desc_relevante in ranking_relevancia:
             for evento in lista_eventos_original:
                 for partido in evento["partidos"]:
-                    # --- ESTA ES LA LÍNEA DE LÓGICA CORREGIDA ---
-                    # Comprobamos si el nombre corto del partido está DENTRO de la respuesta larga de Gemini.
-                    if partido["descripcion"] and partido["descripcion"] in desc_relevante_larga:
+                    if desc_relevante and desc_relevante in partido["descripcion"]:
                         tarjeta_especial = {
                             "evento_principal": evento["evento_principal"],
                             "partido_relevante": {
