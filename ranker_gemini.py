@@ -2,11 +2,11 @@ import requests
 import json
 import os
 from ftplib import FTP
+from datetime import datetime  # <-- LÍNEA AÑADIDA Y CORREGIDA
 import google.generativeai as genai
 
 # --- 1. CONFIGURACIÓN ---
-# Leemos los secrets de GitHub. La URL ahora apunta a tu propio events.json
-URL_JSON_FUENTE = "https://24hometv.xyz/events.json" # URL de tu archivo JSON en vivo
+URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
 NOMBRE_ARCHIVO_SALIDA = "eventos-relevantes.json"
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
@@ -16,10 +16,6 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIÓN PARA LLAMAR A GEMINI ---
 def obtener_ranking_eventos(lista_eventos):
-    """
-    Toma una lista de objetos de evento, extrae las descripciones,
-    y pide a Gemini que clasifique las 3 más relevantes.
-    """
     if not GEMINI_API_KEY:
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return []
@@ -29,7 +25,6 @@ def obtener_ranking_eventos(lista_eventos):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # Creamos una lista de descripciones de partidos para el análisis
         descripciones_partidos = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
@@ -72,10 +67,8 @@ def obtener_ranking_eventos(lista_eventos):
 def main():
     print(f"Iniciando proceso de ranking de eventos...")
     
-    # --- PASO A: LEER EL JSON DESDE LA WEB ---
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
-        # Añadimos un parámetro para evitar la caché del navegador/servidor
         respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
@@ -87,28 +80,24 @@ def main():
         print(f"ERROR FATAL al leer el archivo JSON: {e}")
         return
 
-    # --- PASO B: OBTENER RANKING DE GEMINI ---
     ranking = obtener_ranking_eventos(lista_eventos_original)
 
     if not ranking:
         print("No se recibió ranking de Gemini. El archivo de eventos relevantes no se actualizará.")
-        # Opcional: podríamos crear un archivo vacío o mantener el anterior.
-        # Por seguridad, es mejor no hacer nada si no hay ranking.
         return
 
-    # --- PASO C: FILTRAR LOS EVENTOS RELEVANTES ---
     print("3. Filtrando los eventos relevantes de la lista original...")
     eventos_relevantes = []
     for desc_relevante in ranking:
         encontrado = False
         for evento in lista_eventos_original:
+            # Hacemos una copia para no modificar la lista original mientras iteramos
             for partido in evento.get("partidos", []):
                 if desc_relevante == partido.get("descripcion"):
-                    # Creamos una copia del evento principal, pero solo con el partido relevante
                     evento_relevante = {
                         "evento_principal": evento["evento_principal"],
-                        "detalle_evento": evento["detalle_evento"],
-                        "partidos": [partido] # Lista con un solo partido
+                        "detalle_evento": evento.get("detalle_evento", ""),
+                        "partidos": [partido]
                     }
                     eventos_relevantes.append(evento_relevante)
                     encontrado = True
@@ -116,10 +105,8 @@ def main():
             if encontrado:
                 break
     
-    # Creamos el objeto JSON final
     json_salida = {"eventos_relevantes": eventos_relevantes}
 
-    # --- PASO D: GUARDAR Y SUBIR EL NUEVO ARCHIVO ---
     print(f"4. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
         json.dump(json_salida, f, indent=4, ensure_ascii=False)
