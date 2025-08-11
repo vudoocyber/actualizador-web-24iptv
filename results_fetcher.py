@@ -26,7 +26,7 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
+    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     
     hora, minuto, periodo = match.groups()
@@ -38,47 +38,44 @@ def convertir_hora_a_24h(hora_str):
         
     return hora + (minuto / 60.0)
 
-def obtener_resultado_gemini(descripcion_partido):
+def obtener_url_resultado_gemini(descripcion_partido):
+    """
+    Consulta a Gemini para obtener una URL de búsqueda de Google para el resultado.
+    """
     if not GEMINI_API_KEY:
-        print("  [ERROR] API Key de Gemini no encontrada.")
+        print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return None
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
+        # --- NUEVO PROMPT PARA OBTENER URL ---
         prompt = f"""
-        Actúa como un motor de búsqueda y asistente de resultados deportivos. Tu única tarea es encontrar el resultado final del siguiente partido que se jugó hoy.
+        Actúa como un asistente de búsqueda. Tu única tarea es generar la URL de búsqueda de Google más probable para encontrar el resultado final del siguiente partido que se jugó hoy.
         
         PARTIDO: "{descripcion_partido}"
 
-        Busca el resultado y devuelve la respuesta en el siguiente formato exacto: "MARCADOR, ESTADO".
-        Ejemplos de respuestas válidas:
-        - "2-1, Finalizado"
-        - "27-14, Finalizado"
-
-        Si no puedes encontrar el resultado de manera definitiva, responde exactamente con la frase "Resultado no disponible".
-        No añadas explicaciones ni ninguna otra palabra.
+        Responde ÚNICAMENTE con la URL. No añadas explicaciones ni ningún otro texto.
+        Ejemplo de respuesta: https://www.google.com/search?q=resultado+final+{descripcion_partido.replace(" ", "+")}
         """
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
-        respuesta_cruda = response.text.strip()
-        print(f"  [DIAGNÓSTICO] Respuesta de Gemini para '{descripcion_partido}': {respuesta_cruda}")
+        url_resultado = response.text.strip()
 
-        if "no disponible" in respuesta_cruda.lower():
+        # Verificación simple para asegurar que es una URL válida
+        if url_resultado.startswith("http"):
+            print(f"  > URL de Gemini para '{descripcion_partido}': {url_resultado}")
+            return url_resultado
+        else:
+            print(f"  > Respuesta inválida de Gemini (no es una URL): {url_resultado}")
             return None
 
-        partes = respuesta_cruda.split(',')
-        resultado = partes[0].strip()
-        estado = partes[1].strip() if len(partes) > 1 else "Finalizado"
-
-        return {"resultado": resultado, "estado": estado}
-
     except Exception as e:
-        print(f"  [ERROR] Excepción al contactar con Gemini para '{descripcion_partido}': {e}")
+        print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL CON REGISTRO DE DIAGNÓSTICO MEJORADO ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     
@@ -90,18 +87,18 @@ def main():
         lista_eventos_original = datos.get("eventos", [])
         if not lista_eventos_original:
             raise ValueError("El archivo events.json está vacío o no tiene la clave 'eventos'.")
-        print(f"Archivo events.json leído correctamente con {len(lista_eventos_original)} ligas/eventos.")
+        print("Archivo events.json leído correctamente.")
     except Exception as e:
         print(f"ERROR FATAL al leer el archivo JSON: {e}")
         return
 
-    print("\n--- INICIO DEL DIAGNÓSTICO DE PARTIDOS ---")
+    print("2. Identificando partidos finalizados y buscando URLs de resultados...")
     resultados_finales = []
     
     cst_offset = timezone(timedelta(hours=-6))
     hora_actual_cst = datetime.now(cst_offset)
     hora_actual_float = hora_actual_cst.hour + (hora_actual_cst.minute / 60.0)
-    print(f"Hora actual de referencia (Centro de México): {hora_actual_cst.strftime('%I:%M %p CST')} ({hora_actual_float:.2f})")
+    print(f"Hora actual (Centro de México): {hora_actual_cst.strftime('%I:%M %p CST')}")
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
@@ -110,47 +107,36 @@ def main():
             horario_str = partido.get("horarios", "")
             
             hora_centro_str = extraer_hora_centro(horario_str)
-            if not hora_centro_str:
-                continue
+            if not hora_centro_str: continue
 
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
-            if hora_ct_24 is None:
-                continue
+            if hora_ct_24 is None: continue
             
-            # Hora a la que consideramos que un partido ya terminó (inicio + 1.5 horas)
-            hora_fin_estimada = hora_ct_24 + 1.5
-            
-            print(f"\n- Verificando: '{partido['descripcion']}'")
-            print(f"  Hora de inicio (CT): {hora_ct_24:.2f}h. Hora de fin estimada: {hora_fin_estimada:.2f}h.")
-            
-            if hora_actual_float > hora_fin_estimada:
-                print(f"  [ACCIÓN] Partido considerado FINALIZADO. Consultando a Gemini...")
-                info_resultado = obtener_resultado_gemini(partido['descripcion'])
-                if info_resultado:
+            if hora_actual_float > hora_ct_24 + 1.5:
+                print(f"- Partido finalizado detectado: {partido['descripcion']}")
+                url = obtener_url_resultado_gemini(partido['descripcion'])
+                if url:
                     resultados_finales.append({
-                        "evento_principal": evento["evento_principal"],
                         "descripcion": partido["descripcion"],
-                        "resultado": info_resultado["resultado"],
-                        "estado": info_resultado["estado"]
+                        "estado": "Finalizado",
+                        "url_resultado": url
                     })
-                    print(f"  [ÉXITO] Resultado añadido: {info_resultado['resultado']}")
-                else:
-                    print(f"  [INFO] Gemini no devolvió un resultado válido.")
-            else:
-                print(f"  [INFO] Omitiendo partido (aún no ha finalizado).")
 
-    print("\n--- FIN DEL DIAGNÓSTICO DE PARTIDOS ---")
-    json_salida = {"fecha_actualizacion": datetime.now().isoformat(), "resultados": resultados_finales}
+    # --- NUEVA ESTRUCTURA DEL JSON DE SALIDA ---
+    json_salida = {
+        "fecha_actualizacion": datetime.now().isoformat(),
+        "resultados": resultados_finales
+    }
 
-    print(f"\n3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
+    print(f"3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
         json.dump(json_salida, f, indent=4, ensure_ascii=False)
     print("Archivo local guardado.")
     
-    # ... (El resto del código de subida por FTP no cambia)
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
         return
+    
     print(f"4. Subiendo '{NOMBRE_ARCHIVO_SALIDA}' al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
