@@ -14,13 +14,13 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (PROMPT ACTUALIZADO) ---
+# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (CON PROMPT FINAL) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return []
 
-    print("Contactando a la IA de Gemini con nueva regla de exclusión...")
+    print("Contactando a la IA de Gemini con prompt final optimizado...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -42,7 +42,7 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT MEJORADO CON REGLA DE EXCLUSIÓN ---
+        # --- INICIO DEL PROMPT FINAL Y MEJORADO ---
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
 
@@ -52,7 +52,7 @@ def obtener_ranking_eventos(lista_eventos):
 
         1.  **REGLA CRÍTICA DE TIEMPO:** Ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente. Prioriza eventos que están por iniciar o en curso.
         2.  **REGLA CRÍTICA DE EXCLUSIÓN:** Los partidos de ligas o torneos femeninos (ej. Liga MX Femenil, NWSL, Copa América Femenil, Tour de Francia Femenil) NO deben ser considerados para el top 3, a menos que se trate de un evento de magnitud excepcional como la final de una Copa del Mundo.
-        3.  **Alto Interés Regional:** De los eventos restantes, da máxima prioridad a los de Liga MX, NFL, MLB, NBA y peleas de boxeo importantes.
+        3.  **Alto Interés Regional:** De los eventos restantes, da máxima prioridad a los que más televidentes tienen o más controversia generan como de Liga MX, NFL, MLB, NBA y peleas de boxeo importantes, Peleas de la UFC, equipos con la mayor cantidad de seguidores a nivel mundial, como ejemplo el barcelona, america, chivas, Dallas Cowboys, Kansas City Chiefs, Golden State Warriors, Los Angeles Lakers, New York Yankees, Los Angeles Dodgers, Real Madrid, FC Barcelona, Liverpool, Manchester United, Juventus, Inter de Milán, Bayern de Múnich, Paris Saint-Germain.
         4.  **Relevancia Cultural General:** Considera también conciertos, estrenos de TV o eventos de cultura pop muy esperados.
 
         La salida debe ser exclusivamente el texto de la descripción de los 3 eventos seleccionados (sin la parte del horario), cada uno en una nueva línea, en orden del más al menos relevante.
@@ -62,11 +62,12 @@ def obtener_ranking_eventos(lista_eventos):
         LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
+        # --- FIN DEL PROMPT FINAL Y MEJORADO ---
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini (con exclusión) recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (con prompt final) recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
