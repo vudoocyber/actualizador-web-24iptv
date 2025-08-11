@@ -39,19 +39,14 @@ def convertir_hora_a_24h(hora_str):
     return hora + (minuto / 60.0)
 
 def obtener_resultado_gemini(descripcion_partido):
-    """
-    Consulta a Gemini por el resultado y estado de un partido específico.
-    Ahora devuelve un diccionario: {"resultado": "2-1", "estado": "Finalizado"} o None.
-    """
     if not GEMINI_API_KEY:
-        print("ADVERTENCIA: API Key de Gemini no encontrada.")
+        print("  [ERROR] API Key de Gemini no encontrada.")
         return None
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # --- PROMPT MEJORADO Y MÁS PRECISO ---
         prompt = f"""
         Actúa como un motor de búsqueda y asistente de resultados deportivos. Tu única tarea es encontrar el resultado final del siguiente partido que se jugó hoy.
         
@@ -61,20 +56,18 @@ def obtener_resultado_gemini(descripcion_partido):
         Ejemplos de respuestas válidas:
         - "2-1, Finalizado"
         - "27-14, Finalizado"
-        - "3-0, Finalizado"
 
-        Si no puedes encontrar el resultado de manera definitiva, responde exactamente con la frase "Resultado no encontrado".
-        No añadas explicaciones, contexto, ni ninguna otra palabra.
+        Si no puedes encontrar el resultado de manera definitiva, responde exactamente con la frase "Resultado no disponible".
+        No añadas explicaciones ni ninguna otra palabra.
         """
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
         respuesta_cruda = response.text.strip()
-        print(f"  > Respuesta de Gemini para '{descripcion_partido}': {respuesta_cruda}")
+        print(f"  [DIAGNÓSTICO] Respuesta de Gemini para '{descripcion_partido}': {respuesta_cruda}")
 
-        if "no encontrado" in respuesta_cruda.lower():
+        if "no disponible" in respuesta_cruda.lower():
             return None
 
-        # --- LÓGICA DE PARSEO MEJORADA ---
         partes = respuesta_cruda.split(',')
         resultado = partes[0].strip()
         estado = partes[1].strip() if len(partes) > 1 else "Finalizado"
@@ -82,10 +75,10 @@ def obtener_resultado_gemini(descripcion_partido):
         return {"resultado": resultado, "estado": estado}
 
     except Exception as e:
-        print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
+        print(f"  [ERROR] Excepción al contactar con Gemini para '{descripcion_partido}': {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL ---
+# --- 3. FUNCIÓN PRINCIPAL CON REGISTRO DE DIAGNÓSTICO MEJORADO ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     
@@ -97,18 +90,18 @@ def main():
         lista_eventos_original = datos.get("eventos", [])
         if not lista_eventos_original:
             raise ValueError("El archivo events.json está vacío o no tiene la clave 'eventos'.")
-        print("Archivo events.json leído correctamente.")
+        print(f"Archivo events.json leído correctamente con {len(lista_eventos_original)} ligas/eventos.")
     except Exception as e:
         print(f"ERROR FATAL al leer el archivo JSON: {e}")
         return
 
-    print("2. Identificando partidos finalizados y buscando resultados...")
+    print("\n--- INICIO DEL DIAGNÓSTICO DE PARTIDOS ---")
     resultados_finales = []
     
     cst_offset = timezone(timedelta(hours=-6))
     hora_actual_cst = datetime.now(cst_offset)
     hora_actual_float = hora_actual_cst.hour + (hora_actual_cst.minute / 60.0)
-    print(f"Hora actual (Centro de México): {hora_actual_cst.strftime('%I:%M %p CST')}")
+    print(f"Hora actual de referencia (Centro de México): {hora_actual_cst.strftime('%I:%M %p CST')} ({hora_actual_float:.2f})")
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
@@ -124,11 +117,15 @@ def main():
             if hora_ct_24 is None:
                 continue
             
-            if hora_actual_float > hora_ct_24 + 1.5:
-                print(f"- Partido finalizado detectado: {partido['descripcion']}")
+            # Hora a la que consideramos que un partido ya terminó (inicio + 1.5 horas)
+            hora_fin_estimada = hora_ct_24 + 1.5
+            
+            print(f"\n- Verificando: '{partido['descripcion']}'")
+            print(f"  Hora de inicio (CT): {hora_ct_24:.2f}h. Hora de fin estimada: {hora_fin_estimada:.2f}h.")
+            
+            if hora_actual_float > hora_fin_estimada:
+                print(f"  [ACCIÓN] Partido considerado FINALIZADO. Consultando a Gemini...")
                 info_resultado = obtener_resultado_gemini(partido['descripcion'])
-                
-                # Verificamos que obtuvimos un resultado válido
                 if info_resultado:
                     resultados_finales.append({
                         "evento_principal": evento["evento_principal"],
@@ -136,18 +133,24 @@ def main():
                         "resultado": info_resultado["resultado"],
                         "estado": info_resultado["estado"]
                     })
+                    print(f"  [ÉXITO] Resultado añadido: {info_resultado['resultado']}")
+                else:
+                    print(f"  [INFO] Gemini no devolvió un resultado válido.")
+            else:
+                print(f"  [INFO] Omitiendo partido (aún no ha finalizado).")
 
+    print("\n--- FIN DEL DIAGNÓSTICO DE PARTIDOS ---")
     json_salida = {"fecha_actualizacion": datetime.now().isoformat(), "resultados": resultados_finales}
 
-    print(f"3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
+    print(f"\n3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
         json.dump(json_salida, f, indent=4, ensure_ascii=False)
     print("Archivo local guardado.")
     
+    # ... (El resto del código de subida por FTP no cambia)
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
         return
-    
     print(f"4. Subiendo '{NOMBRE_ARCHIVO_SALIDA}' al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
