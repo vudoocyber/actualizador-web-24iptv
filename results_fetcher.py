@@ -15,12 +15,9 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIONES AUXILIARES (LÓGICA MEJORADA) ---
+# --- 2. FUNCIONES AUXILIARES ---
 
 def extraer_hora_centro(horario_str):
-    """
-    Busca y extrae específicamente la hora que precede a la palabra 'Centro'.
-    """
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
     if match:
         return match.group(1)
@@ -42,6 +39,10 @@ def convertir_hora_a_24h(hora_str):
     return hora + (minuto / 60.0)
 
 def obtener_resultado_gemini(descripcion_partido):
+    """
+    Consulta a Gemini por el resultado y estado de un partido específico.
+    Ahora devuelve un diccionario: {"resultado": "2-1", "estado": "Finalizado"} o None.
+    """
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return None
@@ -49,12 +50,36 @@ def obtener_resultado_gemini(descripcion_partido):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""Actúa como un asistente de resultados deportivos EN TIEMPO REAL. Quiero saber el resultado final del siguiente partido que se jugó hoy: "{descripcion_partido}". Responde ÚNICAMENTE con el marcador final (ej. "2-1", "27-14"). Si no puedes encontrar el resultado, responde exactamente con "Resultado no encontrado"."""
+        
+        # --- PROMPT MEJORADO Y MÁS PRECISO ---
+        prompt = f"""
+        Actúa como un motor de búsqueda y asistente de resultados deportivos. Tu única tarea es encontrar el resultado final del siguiente partido que se jugó hoy.
+        
+        PARTIDO: "{descripcion_partido}"
+
+        Busca el resultado y devuelve la respuesta en el siguiente formato exacto: "MARCADOR, ESTADO".
+        Ejemplos de respuestas válidas:
+        - "2-1, Finalizado"
+        - "27-14, Finalizado"
+        - "3-0, Finalizado"
+
+        Si no puedes encontrar el resultado de manera definitiva, responde exactamente con la frase "Resultado no encontrado".
+        No añadas explicaciones, contexto, ni ninguna otra palabra.
+        """
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
-        resultado = response.text.strip()
-        print(f"  > Resultado de Gemini para '{descripcion_partido}': {resultado}")
-        return resultado if "no encontrado" not in resultado.lower() else None
+        respuesta_cruda = response.text.strip()
+        print(f"  > Respuesta de Gemini para '{descripcion_partido}': {respuesta_cruda}")
+
+        if "no encontrado" in respuesta_cruda.lower():
+            return None
+
+        # --- LÓGICA DE PARSEO MEJORADA ---
+        partes = respuesta_cruda.split(',')
+        resultado = partes[0].strip()
+        estado = partes[1].strip() if len(partes) > 1 else "Finalizado"
+
+        return {"resultado": resultado, "estado": estado}
 
     except Exception as e:
         print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
@@ -99,16 +124,17 @@ def main():
             if hora_ct_24 is None:
                 continue
             
-            # Si la hora actual es 90 minutos o más después de la hora de inicio, busca el resultado.
             if hora_actual_float > hora_ct_24 + 1.5:
-                print(f"- Partido finalizado detectado: {partido['descripcion']} (Inició a las {hora_ct_24:.2f}h)")
-                resultado = obtener_resultado_gemini(partido['descripcion'])
-                if resultado:
+                print(f"- Partido finalizado detectado: {partido['descripcion']}")
+                info_resultado = obtener_resultado_gemini(partido['descripcion'])
+                
+                # Verificamos que obtuvimos un resultado válido
+                if info_resultado:
                     resultados_finales.append({
                         "evento_principal": evento["evento_principal"],
                         "descripcion": partido["descripcion"],
-                        "resultado": resultado,
-                        "estado": "Finalizado"
+                        "resultado": info_resultado["resultado"],
+                        "estado": info_resultado["estado"]
                     })
 
     json_salida = {"fecha_actualizacion": datetime.now().isoformat(), "resultados": resultados_finales}
