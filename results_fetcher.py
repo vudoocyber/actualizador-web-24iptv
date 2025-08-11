@@ -20,16 +20,13 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 def extraer_hora_centro(horario_str):
     """
     Busca y extrae específicamente la hora que precede a la palabra 'Centro'.
-    Ej: "7 pm Este, 5 p.m. Centro" -> devuelve "5 p.m."
     """
-    # Expresión regular para encontrar el patrón de hora antes de "Centro"
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
     if match:
         return match.group(1)
     return None
 
 def convertir_hora_a_24h(hora_str):
-    """Convierte una hora como '7 pm' o '10:30 p.m.' a formato de 24 horas (ej. 19, 22.5)."""
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
     match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
@@ -45,7 +42,6 @@ def convertir_hora_a_24h(hora_str):
     return hora + (minuto / 60.0)
 
 def obtener_resultado_gemini(descripcion_partido):
-    """Consulta a Gemini por el resultado de un partido específico."""
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return None
@@ -53,7 +49,7 @@ def obtener_resultado_gemini(descripcion_partido):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""Actúa como un asistente de resultados deportivos EN TIEMPO REAL. Quiero saber el resultado final del siguiente partido que se jugó hoy: "{descripcion_partido}". Responde ÚNICAMENTE con el marcador final en el formato más común (ej. "2-1", "27-14"). Si no puedes encontrar el resultado, responde exactamente con "Resultado no encontrado"."""
+        prompt = f"""Actúa como un asistente de resultados deportivos EN TIEMPO REAL. Quiero saber el resultado final del siguiente partido que se jugó hoy: "{descripcion_partido}". Responde ÚNICAMENTE con el marcador final (ej. "2-1", "27-14"). Si no puedes encontrar el resultado, responde exactamente con "Resultado no encontrado"."""
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
         resultado = response.text.strip()
@@ -64,7 +60,7 @@ def obtener_resultado_gemini(descripcion_partido):
         print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL (LÓGICA DE TIEMPO CORREGIDA) ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     
@@ -95,10 +91,9 @@ def main():
         for partido in evento.get("partidos", []):
             horario_str = partido.get("horarios", "")
             
-            # --- LÓGICA DE TIEMPO MEJORADA ---
             hora_centro_str = extraer_hora_centro(horario_str)
             if not hora_centro_str:
-                continue # Si no hay hora del Centro, no podemos comparar.
+                continue
 
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None:
