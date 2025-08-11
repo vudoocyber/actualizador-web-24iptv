@@ -15,7 +15,8 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIONES AUXILIARES (sin cambios) ---
+# --- 2. FUNCIONES AUXILIARES ---
+
 def extraer_hora_centro(horario_str):
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
     if match:
@@ -25,20 +26,21 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA ---
+    # Se eliminó un paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
+    
     hora, minuto, periodo = match.groups()
     hora = int(hora)
     minuto = int(minuto) if minuto else 0
+    
     if periodo == 'pm' and hora != 12: hora += 12
     if periodo == 'am' and hora == 12: hora = 0
+        
     return hora + (minuto / 60.0)
 
-# --- 3. FUNCIÓN PRINCIPAL Y ÚNICA DE IA (OPTIMIZADA) ---
 def obtener_resultados_en_lote(partidos_finalizados):
-    """
-    Toma una lista de descripciones de partidos y pide a Gemini todos los resultados en una sola llamada.
-    """
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return []
@@ -51,7 +53,6 @@ def obtener_resultados_en_lote(partidos_finalizados):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # Creamos una lista numerada para que la IA la procese
         lista_para_prompt = "\n".join(partidos_finalizados)
 
         prompt = f"""
@@ -77,12 +78,10 @@ def obtener_resultados_en_lote(partidos_finalizados):
         """
         
         response = model.generate_content(prompt, request_options={'timeout': 180})
-        # Limpiamos la respuesta para asegurarnos de que sea solo el JSON
         respuesta_limpia = response.text.strip().replace("```json", "").replace("```", "").strip()
         
         print(f"Respuesta JSON de Gemini recibida:\n{respuesta_limpia}")
         
-        # Parseamos la respuesta JSON de la IA
         resultados = json.loads(respuesta_limpia)
         return resultados
 
@@ -90,7 +89,7 @@ def obtener_resultados_en_lote(partidos_finalizados):
         print(f"ERROR al contactar o procesar la respuesta de Gemini: {e}")
         return []
 
-# --- 4. FUNCIÓN PRINCIPAL ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     
@@ -120,6 +119,7 @@ def main():
             horario_str = partido.get("horarios", "")
             hora_centro_str = extraer_hora_centro(horario_str)
             if not hora_centro_str: continue
+            
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
             
@@ -128,10 +128,8 @@ def main():
 
     print(f"Se encontraron {len(partidos_a_consultar)} partidos finalizados para consultar.")
 
-    # --- NUEVA LÓGICA: UNA SOLA LLAMADA A LA IA ---
     resultados_de_gemini = obtener_resultados_en_lote(partidos_a_consultar)
 
-    # Convertimos la lista de resultados de Gemini a un diccionario para búsqueda rápida
     mapa_resultados = {res["partido"]: res["resultado"] for res in resultados_de_gemini}
     
     resultados_finales = []
@@ -140,7 +138,6 @@ def main():
             "descripcion": descripcion,
             "resultado": resultado,
             "estado": "Finalizado"
-            # Ya no necesitamos buscar el evento principal, simplificamos la salida
         })
 
     json_salida = {"fecha_actualizacion": datetime.now().isoformat(), "resultados": resultados_finales}
