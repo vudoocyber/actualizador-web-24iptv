@@ -26,7 +26,9 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA ---
+    # Se eliminó un paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     
     hora, minuto, periodo = match.groups()
@@ -39,9 +41,6 @@ def convertir_hora_a_24h(hora_str):
     return hora + (minuto / 60.0)
 
 def obtener_url_resultado_gemini(descripcion_partido):
-    """
-    Consulta a Gemini para obtener una URL de búsqueda de Google para el resultado.
-    """
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return None
@@ -50,7 +49,6 @@ def obtener_url_resultado_gemini(descripcion_partido):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # --- NUEVO PROMPT PARA OBTENER URL ---
         prompt = f"""
         Actúa como un asistente de búsqueda. Tu única tarea es generar la URL de búsqueda de Google más probable para encontrar el resultado final del siguiente partido que se jugó hoy.
         
@@ -63,7 +61,6 @@ def obtener_url_resultado_gemini(descripcion_partido):
         response = model.generate_content(prompt, request_options={'timeout': 90})
         url_resultado = response.text.strip()
 
-        # Verificación simple para asegurar que es una URL válida
         if url_resultado.startswith("http"):
             print(f"  > URL de Gemini para '{descripcion_partido}': {url_resultado}")
             return url_resultado
@@ -122,7 +119,6 @@ def main():
                         "url_resultado": url
                     })
 
-    # --- NUEVA ESTRUCTURA DEL JSON DE SALIDA ---
     json_salida = {
         "fecha_actualizacion": datetime.now().isoformat(),
         "resultados": resultados_finales
