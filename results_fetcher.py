@@ -3,6 +3,7 @@ import json
 import os
 from ftplib import FTP
 from datetime import datetime, timezone, timedelta
+import pytz # <-- LÍNEA FALTANTE AÑADIDA
 import re
 import google.generativeai as genai
 
@@ -25,9 +26,7 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    # --- LÍNEA CORREGIDA DEFINITIVAMENTE ---
-    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
-    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
+    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     
     hora, minuto, periodo = match.groups()
@@ -74,7 +73,6 @@ def obtener_url_resultado_gemini(descripcion_partido, fecha_evento):
 # --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
-    mexico_city_tz = pytz.timezone("America/Mexico_City")
     
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
@@ -95,6 +93,7 @@ def main():
     print("2. Identificando partidos finalizados y buscando URLs de resultados...")
     resultados_finales = []
     
+    mexico_city_tz = pytz.timezone("America/Mexico_City")
     hora_actual_mexico = datetime.now(mexico_city_tz)
     hora_actual_float = hora_actual_mexico.hour + (hora_actual_mexico.minute / 60.0)
     print(f"Hora actual (Ciudad de México): {hora_actual_mexico.strftime('%I:%M %p %Z')}")
