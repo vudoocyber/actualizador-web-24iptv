@@ -15,7 +15,7 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (PROMPT REFORZADO) ---
+# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (sin cambios) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
@@ -43,22 +43,15 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- INICIO DEL PROMPT REFORZADO Y MÁS ESTRICTO ---
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
-
-        La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
-
         Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes. Realiza esta tarea en dos pasos:
-
         **Paso 1: Filtrado Inicial (Reglas de Exclusión OBLIGATORIAS)**
-        - Primero, ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente según la hora actual.
+        - Primero, ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente.
         - Segundo, y más importante, descarta INMEDIATAMENTE cualquier partido de una liga o torneo femenino. Palabras clave para descartar incluyen "Femenil", "WNBA", "NWSL". Esta regla es absoluta y no tiene excepciones.
-
         **Paso 2: Ranking de Relevancia (De la lista ya filtrada)**
         - De los eventos que quedan después del filtrado, selecciona los 3 más relevantes para la audiencia de México y USA.
         - Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, peleas de Boxeo/UFC, y partidos de equipos muy populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
-
         **Formato de Salida:**
         - Devuelve ÚNICAMENTE la descripción exacta de los 3 eventos que seleccionaste, en orden del más relevante al menos relevante.
         - Cada descripción debe estar en una nueva línea.
@@ -67,7 +60,6 @@ def obtener_ranking_eventos(lista_eventos):
         LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
-        # --- FIN DEL PROMPT REFORZADO ---
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
@@ -79,7 +71,7 @@ def obtener_ranking_eventos(lista_eventos):
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
         return []
 
-# --- 3. FUNCIÓN PRINCIPAL (sin cambios) ---
+# --- 3. FUNCIÓN PRINCIPAL (CON LÓGICA DE COINCIDENCIA CORREGIDA) ---
 def main():
     print(f"Iniciando proceso de ranking de eventos...")
     
@@ -99,8 +91,7 @@ def main():
     ranking = obtener_ranking_eventos(lista_eventos_original)
 
     if not ranking:
-        print("No se recibió ranking de Gemini. El archivo de eventos relevantes no se actualizará.")
-        # Se crea un archivo vacío para limpiar los eventos relevantes del día anterior
+        print("No se recibió ranking de Gemini. El archivo de eventos relevantes se creará vacío.")
         json_salida = {"eventos_relevantes": []}
     else:
         print("3. Filtrando los eventos relevantes de la lista original...")
@@ -110,14 +101,18 @@ def main():
             encontrado = False
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
-                    if desc_relevante in partido.get("descripcion", "") and partido.get("descripcion") not in descripciones_ya_anadidas:
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    # Comprobamos si la descripción CORTA del partido está DENTRO de la respuesta LARGA de Gemini.
+                    descripcion_corta = partido.get("descripcion", "")
+                    if descripcion_corta and descripcion_corta in desc_relevante and descripcion_corta not in descripciones_ya_anadidas:
+                    # --- FIN DE LA CORRECCIÓN ---
                         evento_relevante = {
                             "evento_principal": evento["evento_principal"],
                             "detalle_evento": evento.get("detalle_evento", ""),
                             "partidos": [partido]
                         }
                         eventos_relevantes.append(evento_relevante)
-                        descripciones_ya_anadidas.add(partido.get("descripcion"))
+                        descripciones_ya_anadidas.add(descripcion_corta)
                         encontrado = True
                         break
                 if encontrado:
