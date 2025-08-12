@@ -2,8 +2,7 @@ import requests
 import json
 import os
 from ftplib import FTP
-from datetime import datetime
-import pytz
+from datetime import datetime, timezone, timedelta
 import re
 import google.generativeai as genai
 
@@ -19,23 +18,31 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIONES AUXILIARES ---
 def extraer_hora_centro(horario_str):
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
-    if match: return match.group(1)
+    if match:
+        return match.group(1)
     return None
 
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA DEFINITIVAMENTE ---
+    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
+    
     hora, minuto, periodo = match.groups()
     hora = int(hora)
     minuto = int(minuto) if minuto else 0
+    
     if periodo == 'pm' and hora != 12: hora += 12
     if periodo == 'am' and hora == 12: hora = 0
+        
     return hora + (minuto / 60.0)
 
 def obtener_url_resultado_gemini(descripcion_partido, fecha_evento):
-    if not GEMINI_API_KEY: return None
+    if not GEMINI_API_KEY:
+        print("ADVERTENCIA: API Key de Gemini no encontrada.")
+        return None
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -52,10 +59,14 @@ def obtener_url_resultado_gemini(descripcion_partido, fecha_evento):
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
         url_resultado = response.text.strip()
+
         if url_resultado.startswith("http"):
             print(f"  > URL de Gemini para '{descripcion_partido}': {url_resultado}")
             return url_resultado
-        return None
+        else:
+            print(f"  > Respuesta inválida de Gemini (no es una URL): {url_resultado}")
+            return None
+
     except Exception as e:
         print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
         return None
@@ -73,6 +84,7 @@ def main():
         lista_eventos_original = datos.get("eventos", [])
         titulo_guia = datos.get("titulo_guia", "")
         fecha_extraida = re.sub('<[^<]+?>', '', titulo_guia).split(',')[-1].strip()
+
         if not lista_eventos_original or not fecha_extraida:
             raise ValueError("El archivo events.json está vacío o no contiene una fecha en el título.")
         print(f"Archivo events.json leído. Fecha de la guía: {fecha_extraida}")
@@ -89,10 +101,13 @@ def main():
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
+            
         for partido in evento.get("partidos", []):
             horario_str = partido.get("horarios", "")
+            
             hora_centro_str = extraer_hora_centro(horario_str)
             if not hora_centro_str: continue
+
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
             
@@ -106,7 +121,10 @@ def main():
                         "url_resultado": url
                     })
 
-    json_salida = {"fecha_actualizacion": hora_actual_mexico.isoformat(), "resultados": resultados_finales}
+    json_salida = {
+        "fecha_actualizacion": hora_actual_mexico.isoformat(),
+        "resultados": resultados_finales
+    }
 
     print(f"3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}' con {len(resultados_finales)} resultados...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
