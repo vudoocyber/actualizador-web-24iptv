@@ -3,6 +3,7 @@ import json
 import os
 from ftplib import FTP
 from datetime import datetime, timezone, timedelta
+import re
 import google.generativeai as genai
 
 # --- 1. CONFIGURACIÓN ---
@@ -14,13 +15,13 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (CON PROMPT FINAL) ---
+# --- 2. FUNCIÓN PARA LLAMAR A GEMINI (PROMPT REFORZADO) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return []
 
-    print("Contactando a la IA de Gemini con prompt final optimizado...")
+    print("Contactando a la IA de Gemini con prompt reforzado...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -42,32 +43,36 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- INICIO DEL PROMPT FINAL Y MEJORADO ---
+        # --- INICIO DEL PROMPT REFORZADO Y MÁS ESTRICTO ---
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
 
         La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
 
-        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes para esta audiencia específica, siguiendo estas reglas en orden estricto:
+        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes. Realiza esta tarea en dos pasos:
 
-        1.  **REGLA CRÍTICA DE TIEMPO:** Ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente. Prioriza eventos que están por iniciar o en curso.
-        2.  **REGLA CRÍTICA DE EXCLUSIÓN:** Los partidos de ligas o torneos femeninos (ej. Liga MX Femenil, NWSL, Copa América Femenil, Tour de Francia Femenil) NO deben ser considerados para el top 3, a menos que se trate de un evento de magnitud excepcional como la final de una Copa del Mundo.
-        3.  **Alto Interés Regional:** De los eventos restantes, da máxima prioridad a los que más televidentes tienen o más controversia generan como de Liga MX, NFL, MLB, NBA y peleas de boxeo importantes, Peleas de la UFC, equipos con la mayor cantidad de seguidores a nivel mundial, como ejemplo el barcelona, america, chivas, Dallas Cowboys, Kansas City Chiefs, Golden State Warriors, Los Angeles Lakers, New York Yankees, Los Angeles Dodgers, Real Madrid, FC Barcelona, Liverpool, Manchester United, Juventus, Inter de Milán, Bayern de Múnich, Paris Saint-Germain.
-        4.  **Relevancia Cultural General:** Considera también conciertos, estrenos de TV o eventos de cultura pop muy esperados.
+        **Paso 1: Filtrado Inicial (Reglas de Exclusión OBLIGATORIAS)**
+        - Primero, ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente según la hora actual.
+        - Segundo, y más importante, descarta INMEDIATAMENTE cualquier partido de una liga o torneo femenino. Palabras clave para descartar incluyen "Femenil", "WNBA", "NWSL". Esta regla es absoluta y no tiene excepciones.
 
-        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos seleccionados (sin la parte del horario), cada uno en una nueva línea, en orden del más al menos relevante.
-        Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con la descripción de uno de los eventos en la lista.
-        NO incluyas números, viñetas, comillas, explicaciones, o cualquier texto introductorio.
+        **Paso 2: Ranking de Relevancia (De la lista ya filtrada)**
+        - De los eventos que quedan después del filtrado, selecciona los 3 más relevantes para la audiencia de México y USA.
+        - Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, peleas de Boxeo/UFC, y partidos de equipos muy populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
+
+        **Formato de Salida:**
+        - Devuelve ÚNICAMENTE la descripción exacta de los 3 eventos que seleccionaste, en orden del más relevante al menos relevante.
+        - Cada descripción debe estar en una nueva línea.
+        - NO incluyas los pasos de tu razonamiento, números, viñetas, comillas, explicaciones o cualquier otro texto introductorio.
 
         LISTA DE EVENTOS PARA ANALIZAR:
         {lista_texto_plano}
         """
-        # --- FIN DEL PROMPT FINAL Y MEJORADO ---
+        # --- FIN DEL PROMPT REFORZADO ---
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini (con prompt final) recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (con exclusión reforzada) recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
@@ -95,29 +100,29 @@ def main():
 
     if not ranking:
         print("No se recibió ranking de Gemini. El archivo de eventos relevantes no se actualizará.")
-        return
-
-    print("3. Filtrando los eventos relevantes de la lista original...")
-    eventos_relevantes = []
-    descripciones_ya_anadidas = set()
-    for desc_relevante in ranking:
-        encontrado = False
-        for evento in lista_eventos_original:
-            for partido in evento.get("partidos", []):
-                if desc_relevante in partido.get("descripcion", "") and partido.get("descripcion") not in descripciones_ya_anadidas:
-                    evento_relevante = {
-                        "evento_principal": evento["evento_principal"],
-                        "detalle_evento": evento.get("detalle_evento", ""),
-                        "partidos": [partido]
-                    }
-                    eventos_relevantes.append(evento_relevante)
-                    descripciones_ya_anadidas.add(partido.get("descripcion"))
-                    encontrado = True
+        # Se crea un archivo vacío para limpiar los eventos relevantes del día anterior
+        json_salida = {"eventos_relevantes": []}
+    else:
+        print("3. Filtrando los eventos relevantes de la lista original...")
+        eventos_relevantes = []
+        descripciones_ya_anadidas = set()
+        for desc_relevante in ranking:
+            encontrado = False
+            for evento in lista_eventos_original:
+                for partido in evento.get("partidos", []):
+                    if desc_relevante in partido.get("descripcion", "") and partido.get("descripcion") not in descripciones_ya_anadidas:
+                        evento_relevante = {
+                            "evento_principal": evento["evento_principal"],
+                            "detalle_evento": evento.get("detalle_evento", ""),
+                            "partidos": [partido]
+                        }
+                        eventos_relevantes.append(evento_relevante)
+                        descripciones_ya_anadidas.add(partido.get("descripcion"))
+                        encontrado = True
+                        break
+                if encontrado:
                     break
-            if encontrado:
-                break
-    
-    json_salida = {"eventos_relevantes": eventos_relevantes}
+        json_salida = {"eventos_relevantes": eventos_relevantes}
 
     print(f"4. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
