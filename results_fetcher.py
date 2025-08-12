@@ -2,7 +2,8 @@ import requests
 import json
 import os
 from ftplib import FTP
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+import pytz # <-- Nueva librería
 import re
 import google.generativeai as genai
 
@@ -15,7 +16,7 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIONES AUXILIARES ---
+# --- 2. FUNCIONES AUXILIARES (sin cambios) ---
 def extraer_hora_centro(horario_str):
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
     if match: return match.group(1)
@@ -33,7 +34,8 @@ def convertir_hora_a_24h(hora_str):
     if periodo == 'am' and hora == 12: hora = 0
     return hora + (minuto / 60.0)
 
-def obtener_resultados_en_lote(partidos_finalizados):
+# --- 3. FUNCIÓN DE IA (ACTUALIZADA PARA USAR FECHA ESPECÍFICA) ---
+def obtener_resultados_en_lote(partidos_finalizados, fecha_eventos):
     if not GEMINI_API_KEY:
         print("ADVERTENCIA: API Key de Gemini no encontrada.")
         return []
@@ -41,13 +43,15 @@ def obtener_resultados_en_lote(partidos_finalizados):
         print("No hay partidos finalizados para buscar resultados.")
         return []
 
-    print(f"Contactando a Gemini para buscar resultados de {len(partidos_finalizados)} partidos en una sola llamada...")
+    print(f"Contactando a Gemini para buscar resultados de {len(partidos_finalizados)} partidos para la fecha: {fecha_eventos}...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         lista_para_prompt = "\n".join(partidos_finalizados)
+
         prompt = f"""
-        Actúa como un asistente de resultados deportivos. Te daré una lista de partidos que ya finalizaron. Para cada partido en la lista, busca el resultado final.
+        Actúa como un asistente de resultados deportivos. Te daré una lista de partidos. Para cada partido en la lista, busca el resultado final para la fecha específica: {fecha_eventos}.
+
         Devuelve tu respuesta como un array JSON válido y nada más. Cada objeto en el array debe tener dos claves: "partido" (con el nombre exacto que te di) y "resultado" (con el marcador).
         Si no encuentras el resultado para un partido, simplemente omítelo del array JSON en tu respuesta.
 
@@ -70,17 +74,26 @@ def obtener_resultados_en_lote(partidos_finalizados):
         print(f"ERROR al contactar o procesar la respuesta de Gemini: {e}")
         return []
 
-# --- 3. FUNCIÓN PRINCIPAL ---
+# --- 4. FUNCIÓN PRINCIPAL (ACTUALIZADA) ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
+    mexico_city_tz = pytz.timezone("America/Mexico_City")
+    
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
         respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
         lista_eventos_original = datos.get("eventos", [])
-        if not lista_eventos_original: raise ValueError("El archivo events.json está vacío.")
-        print("Archivo events.json leído correctamente.")
+        
+        # --- NUEVO: Extraer la fecha del título de la guía ---
+        titulo_guia = datos.get("titulo_guia", "")
+        # Limpiamos HTML y extraemos la fecha. Ej: "Martes 29 de Julio"
+        fecha_extraida = re.sub('<[^<]+?>', '', titulo_guia).split(',')[-1].strip()
+
+        if not lista_eventos_original or not fecha_extraida:
+            raise ValueError("El archivo events.json está vacío o no contiene una fecha en el título.")
+        print(f"Archivo events.json leído. Fecha de la guía: {fecha_extraida}")
     except Exception as e:
         print(f"ERROR FATAL al leer el archivo JSON: {e}")
         return
@@ -88,10 +101,9 @@ def main():
     print("2. Identificando todos los partidos finalizados...")
     partidos_a_consultar = []
     
-    cst_offset = timezone(timedelta(hours=-6))
-    hora_actual_cst = datetime.now(cst_offset)
-    hora_actual_float = hora_actual_cst.hour + (hora_actual_cst.minute / 60.0)
-    print(f"Hora actual (Centro de México): {hora_actual_cst.strftime('%I:%M %p CST')}")
+    hora_actual_mexico = datetime.now(mexico_city_tz)
+    hora_actual_float = hora_actual_mexico.hour + (hora_actual_mexico.minute / 60.0)
+    print(f"Hora actual (Ciudad de México): {hora_actual_mexico.strftime('%I:%M %p %Z')}")
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
@@ -101,11 +113,15 @@ def main():
             if not hora_centro_str: continue
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
+            
             if hora_actual_float > hora_ct_24 + 1.5:
                 partidos_a_consultar.append(partido['descripcion'])
 
     print(f"Se encontraron {len(partidos_a_consultar)} partidos finalizados para consultar.")
-    resultados_de_gemini = obtener_resultados_en_lote(partidos_a_consultar)
+    
+    # Pasamos la fecha extraída a la función de la IA
+    resultados_de_gemini = obtener_resultados_en_lote(partidos_a_consultar, fecha_extraida)
+
     mapa_resultados = {res["partido"]: res["resultado"] for res in resultados_de_gemini}
     
     resultados_finales = []
@@ -116,7 +132,11 @@ def main():
             "estado": "Finalizado"
         })
 
-    json_salida = {"fecha_actualizacion": datetime.now().isoformat(), "resultados": resultados_finales}
+    # La fecha de actualización ahora es la de México
+    json_salida = {
+        "fecha_actualizacion": hora_actual_mexico.isoformat(),
+        "resultados": resultados_finales
+    }
 
     print(f"3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}' con {len(resultados_finales)} resultados...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
