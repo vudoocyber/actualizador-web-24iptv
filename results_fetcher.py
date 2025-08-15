@@ -3,7 +3,7 @@ import json
 import os
 from ftplib import FTP
 from datetime import datetime, timezone, timedelta
-import pytz # Asegúrate de que esta importación esté presente
+import pytz 
 import re
 import google.generativeai as genai
 
@@ -19,57 +19,50 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIONES AUXILIARES ---
 def extraer_hora_centro(horario_str):
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
-    if match:
-        return match.group(1)
+    if match: return match.group(1)
     return None
 
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    # --- LÍNEA CORREGIDA DEFINITIVAMENTE ---
-    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
     match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
-    
     hora, minuto, periodo = match.groups()
     hora = int(hora)
     minuto = int(minuto) if minuto else 0
-    
     if periodo == 'pm' and hora != 12: hora += 12
     if periodo == 'am' and hora == 12: hora = 0
-        
     return hora + (minuto / 60.0)
 
-def obtener_url_resultado_gemini(descripcion_partido, fecha_evento):
-    if not GEMINI_API_KEY:
-        print("ADVERTENCIA: API Key de Gemini no encontrada.")
-        return None
+# --- FUNCIÓN DE IA ACTUALIZADA ---
+def obtener_url_resultado_gemini(evento_principal, descripcion_partido, fecha_evento):
+    if not GEMINI_API_KEY: return None
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        prompt = f"""
-        Actúa como un asistente de búsqueda. Tu única tarea es generar la URL de búsqueda de Google más probable para encontrar el resultado final del siguiente partido que se jugó en la fecha indicada.
+        # Unimos el evento principal y la descripción para una búsqueda precisa
+        busqueda_completa = f"{evento_principal} {descripcion_partido}"
         
-        PARTIDO: "{descripcion_partido}"
-        FECHA DEL PARTIDO: "{fecha_evento}"
+        prompt = f"""
+        Actúa como un asistente de búsqueda. Tu única tarea es generar la URL de búsqueda de Google más probable para encontrar el resultado final del siguiente evento que se jugó en la fecha indicada.
+        
+        EVENTO: "{busqueda_completa}"
+        FECHA DEL EVENTO: "{fecha_evento}"
 
         Responde ÚNICAMENTE con la URL. No añadas explicaciones ni ningún otro texto.
-        Ejemplo de respuesta: https://www.google.com/search?q=resultado+final+{descripcion_partido.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
+        Ejemplo de respuesta: https://www.google.com/search?q=resultado+final+{busqueda_completa.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
         """
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
         url_resultado = response.text.strip()
 
         if url_resultado.startswith("http"):
-            print(f"  > URL de Gemini para '{descripcion_partido}': {url_resultado}")
+            print(f"  > URL de Gemini para '{busqueda_completa}': {url_resultado}")
             return url_resultado
-        else:
-            print(f"  > Respuesta inválida de Gemini (no es una URL): {url_resultado}")
-            return None
-
+        return None
     except Exception as e:
-        print(f"  > ERROR al contactar con Gemini para '{descripcion_partido}': {e}")
+        print(f"  > ERROR al contactar con Gemini para '{busqueda_completa}': {e}")
         return None
 
 # --- 3. FUNCIÓN PRINCIPAL ---
@@ -102,19 +95,17 @@ def main():
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
-            
         for partido in evento.get("partidos", []):
             horario_str = partido.get("horarios", "")
-            
             hora_centro_str = extraer_hora_centro(horario_str)
             if not hora_centro_str: continue
-
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
             
             if hora_actual_float > hora_ct_24 + 1.5:
                 print(f"- Partido finalizado detectado: {partido['descripcion']}")
-                url = obtener_url_resultado_gemini(partido['descripcion'], fecha_extraida)
+                # --- LLAMADA A LA FUNCIÓN ACTUALIZADA ---
+                url = obtener_url_resultado_gemini(evento['evento_principal'], partido['descripcion'], fecha_extraida)
                 if url:
                     resultados_finales.append({
                         "descripcion": partido["descripcion"],
@@ -122,10 +113,7 @@ def main():
                         "url_resultado": url
                     })
 
-    json_salida = {
-        "fecha_actualizacion": hora_actual_mexico.isoformat(),
-        "resultados": resultados_finales
-    }
+    json_salida = {"fecha_actualizacion": hora_actual_mexico.isoformat(), "resultados": resultados_finales}
 
     print(f"3. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}' con {len(resultados_finales)} resultados...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
