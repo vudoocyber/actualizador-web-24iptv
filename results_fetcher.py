@@ -16,10 +16,8 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIONES AUXILIARES Y DE LÓGICA ---
-
+# --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
-    """Analiza el título de un evento para determinar el deporte."""
     texto = evento_principal.lower()
     if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto:
         return "futbol"
@@ -53,7 +51,9 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA ---
+    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     hora, minuto, periodo = match.groups()
     hora = int(hora)
@@ -84,7 +84,7 @@ def obtener_url_resultado_gemini(busqueda_precisa, fecha_evento):
         print(f"  > ERROR al contactar con Gemini: {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL (LÓGICA RESTAURADA Y MEJORADA) ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     mexico_city_tz = pytz.timezone("America/Mexico_City")
@@ -132,8 +132,6 @@ def main():
             hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
             
-            # --- LÓGICA DE COMPARACIÓN RESTAURADA ---
-            # Comprueba si la hora actual es mayor que la hora de inicio + la duración del deporte
             if hora_actual_float > hora_ct_24 + tiempo_de_espera:
                 print(f"- Partido finalizado detectado ({deporte_actual}, dura {tiempo_de_espera}h): {partido['descripcion']}")
                 busqueda_precisa = f"Resultado {evento['evento_principal']} {partido['descripcion']}"
