@@ -19,14 +19,14 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIÓN PARA LLAMAR A GEMINI (MODELO ACTUALIZADO) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
-        print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
+        print("ERROR: No se encontró la API Key de Gemini.")
         return []
 
-    print("Contactando a la IA de Gemini con modelo actualizado...")
+    print("Contactando a la IA de Gemini con el modelo más reciente...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # --- CAMBIO IMPORTANTE: Se actualizó el nombre del modelo ---
-        model = genai.GenerativeModel('gemini-pro')
+        # --- CAMBIO IMPORTANTE: Usamos el modelo 'latest' para evitar futuros errores ---
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         cst_offset = timezone(timedelta(hours=-6))
         hora_actual_cst = datetime.now(cst_offset)
@@ -35,38 +35,31 @@ def obtener_ranking_eventos(lista_eventos):
         eventos_para_analizar = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
-                linea_completa = f"{partido.get('descripcion', '')} {partido.get('horarios', '')}"
-                eventos_para_analizar.append(linea_completa.strip())
+                eventos_para_analizar.append(f"{partido.get('descripcion', '')} {partido.get('horarios', '')}".strip())
         
         lista_texto_plano = "\n".join(filter(None, set(eventos_para_analizar)))
-
         if not lista_texto_plano:
             print("No se encontraron eventos para analizar.")
             return []
 
         prompt = f"""
-        Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
+        Actúa como un curador de contenido experto para una audiencia de México y Estados Unidos (USA).
         La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
-        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes. Realiza esta tarea en dos pasos:
-        **Paso 1: Filtrado Inicial (Reglas de Exclusión OBLIGATORIAS)**
-        - Primero, ignora por completo cualquier evento cuya hora de inicio ya haya pasado considerablemente.
-        - Segundo, y más importante, descarta INMEDIATAMENTE cualquier partido de una liga o torneo femenino. Palabras clave para descartar incluyen "Femenil", "WNBA", "NWSL". Esta regla es absoluta y no tiene excepciones.
-        **Paso 2: Ranking de Relevancia (De la lista ya filtrada)**
-        - De los eventos que quedan después del filtrado, selecciona los 3 más relevantes para la audiencia de México y USA.
-        - Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, peleas de Boxeo/UFC, y partidos de equipos muy populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
-        **Formato de Salida:**
-        - Devuelve ÚNICAMENTE la descripción exacta de los 3 eventos que seleccionaste, en orden del más al menos relevante.
-        - Cada descripción debe estar en una nueva línea.
-        - NO incluyas los pasos de tu razonamiento, números, viñetas, comillas, explicaciones o cualquier otro texto introductorio.
+        Analiza la siguiente lista de eventos y determina los 3 más relevantes, siguiendo estas reglas en orden estricto:
+        1. REGLA DE TIEMPO: Ignora eventos que ya hayan finalizado.
+        2. REGLA DE EXCLUSIÓN: Descarta INMEDIATAMENTE cualquier partido de una liga o torneo femenino (palabras clave: "Femenil", "WNBA", "NWSL").
+        3. REGLA DE INTERÉS: Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, Boxeo/UFC y partidos de equipos populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
+        
+        Formato de Salida: Devuelve ÚNICAMENTE la descripción exacta de los 3 eventos, cada uno en una nueva línea, en orden de relevancia. NO incluyas números, viñetas, o cualquier otro texto.
 
-        LISTA DE EVENTOS PARA ANALIZAR:
+        LISTA DE EVENTOS:
         {lista_texto_plano}
         """
 
         response = model.generate_content(prompt, request_options={'timeout': 120})
         ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
         
-        print(f"Ranking de Gemini (modelo actualizado) recibido: {ranking_limpio}")
+        print(f"Ranking de Gemini (modelo 'latest') recibido: {ranking_limpio}")
         return ranking_limpio
 
     except Exception as e:
@@ -101,8 +94,7 @@ def main():
         palabras_prohibidas = ["Femenil", "WNBA", "NWSL"]
 
         for desc_relevante in ranking_crudo:
-            if len(eventos_relevantes) >= 3:
-                break
+            if len(eventos_relevantes) >= 3: break
             encontrado = False
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
@@ -110,21 +102,16 @@ def main():
                     if descripcion_corta and descripcion_corta in desc_relevante and descripcion_corta not in descripciones_ya_anadidas:
                         evento_principal = evento.get("evento_principal", "")
                         if any(keyword in evento_principal for keyword in palabras_prohibidas):
-                            print(f"  [FILTRADO] Se omitió '{descripcion_corta}' porque su liga '{evento_principal}' está en la lista de exclusión.")
+                            print(f"  [FILTRADO] Se omitió '{descripcion_corta}' de la liga '{evento_principal}'.")
                             encontrado = True
                             break 
                         print(f"  [ÉXITO] Coincidencia válida encontrada: '{descripcion_corta}'")
-                        evento_relevante = {
-                            "evento_principal": evento_principal,
-                            "detalle_evento": evento.get("detalle_evento", ""),
-                            "partidos": [partido]
-                        }
+                        evento_relevante = {"evento_principal": evento_principal, "detalle_evento": evento.get("detalle_evento", ""), "partidos": [partido]}
                         eventos_relevantes.append(evento_relevante)
                         descripciones_ya_anadidas.add(descripcion_corta)
                         encontrado = True
                         break
-                if encontrado:
-                    break
+                if encontrado: break
         print(f"Ranking final después de aplicar filtros: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes]}")
         json_salida = {"eventos_relevantes": eventos_relevantes}
 
