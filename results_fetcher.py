@@ -19,17 +19,28 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
     texto = evento_principal.lower()
-    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto: return "futbol"
-    if "nfl" in texto or "cfl" in texto or "🏈" in texto: return "futbol_americano"
-    if "mlb" in texto or "beisbol" in texto or "⚾" in texto: return "beisbol"
-    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto: return "baloncesto"
-    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto: return "combate"
-    if "tenis" in texto or "open" in texto or "🎾" in texto: return "tenis"
-    if "nascar" in texto or "racing" in texto or "🏎️" in texto: return "carreras"
-    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto: return "golf"
-    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto: return "voleibol"
-    if "rugby" in texto or "🏉" in texto: return "rugby"
-    if "nhl" in texto or "hockey" in texto or "🏒" in texto: return "hockey"
+    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto:
+        return "futbol"
+    if "nfl" in texto or "cfl" in texto or "🏈" in texto:
+        return "futbol_americano"
+    if "mlb" in texto or "beisbol" in texto or "⚾" in texto:
+        return "beisbol"
+    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto:
+        return "baloncesto"
+    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto:
+        return "combate"
+    if "tenis" in texto or "open" in texto or "🎾" in texto:
+        return "tenis"
+    if "nascar" in texto or "racing" in texto or "🏎️" in texto:
+        return "carreras"
+    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto:
+        return "golf"
+    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto:
+        return "voleibol"
+    if "rugby" in texto or "🏉" in texto:
+        return "rugby"
+    if "nhl" in texto or "hockey" in texto or "🏒" in texto:
+        return "hockey"
     return "default"
 
 def extraer_hora_centro(horario_str):
@@ -40,7 +51,9 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA ---
+    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     hora, minuto, periodo = match.groups()
     hora = int(hora)
@@ -55,7 +68,6 @@ def obtener_resultados_en_lote(partidos_finalizados, fecha_eventos):
     print(f"Contactando a Gemini para buscar resultados de {len(partidos_finalizados)} partidos...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # --- CAMBIO IMPORTANTE: Usamos el modelo que SÍ está en tu lista ---
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         lista_para_prompt = "\n".join(partidos_finalizados)
@@ -63,7 +75,11 @@ def obtener_resultados_en_lote(partidos_finalizados, fecha_eventos):
         Actúa como un asistente de resultados deportivos. Te daré una lista de partidos que ya finalizaron en la fecha: {fecha_eventos}. Para cada partido, busca el resultado final.
         Devuelve tu respuesta como un array JSON válido y nada más. Cada objeto debe tener "partido" y "resultado".
         Si no encuentras un resultado, omítelo del array.
-        Ejemplo: [{{"partido": "Equipo A vs Equipo B", "resultado": "2-1"}}]
+        Ejemplo de respuesta:
+        [
+          {{"partido": "Estoril vs Estrela", "resultado": "1-0"}},
+          {{"partido": "Porto vs Vitoria Guimaraes", "resultado": "2-2"}}
+        ]
         LISTA DE PARTIDOS A BUSCAR:
         {lista_para_prompt}
         """
@@ -75,6 +91,7 @@ def obtener_resultados_en_lote(partidos_finalizados, fecha_eventos):
         print(f"ERROR al contactar o procesar la respuesta de Gemini: {e}")
         return []
 
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     mexico_city_tz = pytz.timezone("America/Mexico_City")
