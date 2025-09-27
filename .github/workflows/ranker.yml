@@ -1,8 +1,10 @@
 name: Ranking de Eventos Relevantes con IA
+
 on:
   schedule:
     - cron: '0 1,5,9,13,17,21 * * *'
   workflow_dispatch:
+
 jobs:
   run-ranking:
     runs-on: ubuntu-latest
@@ -16,10 +18,11 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # Añadimos --upgrade para obtener siempre la última versión de la librería
           pip install --upgrade requests beautifulsoup4 google-generativeai pytz
       - name: Ejecutar script de ranking y subida
         env:
+          # Añadimos la nueva clave de Hugging Face
+          HUGGINGFACE_API_KEY: ${{ secrets.HUGGINGFACE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
