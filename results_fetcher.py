@@ -68,6 +68,7 @@ def obtener_resultados_en_lote(partidos_finalizados, fecha_eventos):
         genai.configure(api_key=GEMINI_API_KEY)
         # --- CAMBIO IMPORTANTE: Usamos el modelo estable 'gemini-pro' ---
         model = genai.GenerativeModel('gemini-pro')
+        
         lista_para_prompt = "\n".join(partidos_finalizados)
         prompt = f"""
         Actúa como un asistente de resultados deportivos. Te daré una lista de partidos que ya finalizaron en la fecha: {fecha_eventos}. Para cada partido, busca el resultado final.
