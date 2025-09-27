@@ -19,15 +19,14 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIÓN PARA LLAMAR A GEMINI (MODELO ACTUALIZADO) ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
-        print("ERROR: No se encontró la API Key de Gemini.")
+        print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return []
-
-    print("Contactando a la IA de Gemini con el modelo más reciente...")
+    print("Contactando a la IA de Gemini con modelo estable...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        # --- CAMBIO IMPORTANTE: Usamos el modelo 'latest' para evitar futuros errores ---
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
+        # --- CAMBIO IMPORTANTE: Usamos el modelo estable 'gemini-pro' ---
+        model = genai.GenerativeModel('gemini-pro')
+        # ... (el resto de la función no cambia) ...
         cst_offset = timezone(timedelta(hours=-6))
         hora_actual_cst = datetime.now(cst_offset)
         hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p CST')
