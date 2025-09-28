@@ -6,7 +6,6 @@ from datetime import datetime, timezone, timedelta
 import pytz
 import re
 import google.generativeai as genai
-import cohere
 
 # --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
@@ -16,66 +15,61 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-COHERE_API_KEY = os.getenv('COHERE_API_KEY')
+# La clave de Hugging Face ya no es necesaria, la lógica fue eliminada.
 
-# --- 2. FUNCIONES DE RANKING ---
-
-def obtener_ranking_gemini(lista_texto_plano, hora_formateada_cst):
-    """Opción 1: Intenta obtener el ranking de Google Gemini."""
+# --- 2. FUNCIÓN PARA LLAMAR A GEMINI ---
+def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
-        print("  > INFO: Clave de Gemini no disponible.")
+        print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return None
-    print("Intentando con Opción 1: Google Gemini...")
+
+    print("Contactando a la IA de Gemini para obtener top 5...")
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = f"La hora actual es {hora_formateada_cst}. De la siguiente lista, escoge los 3 eventos más relevantes para México/USA que no hayan finalizado. Excluye ligas femeninas (WNBA, Liga MX Femenil). Prioriza Liga MX, NFL, MLB, NBA, Boxeo/UFC y equipos populares. Responde solo con los 3 nombres de eventos, cada uno en una línea nueva, sin texto extra.\nLISTA:\n{lista_texto_plano}"
-        response = model.generate_content(prompt, request_options={'timeout': 120})
-        ranking = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
-        if ranking:
-            print(f"  > ÉXITO con Gemini. Ranking: {ranking}")
-            return ranking
-        return None
-    except Exception as e:
-        print(f"  > FALLO Gemini: {e}")
-        return None
-
-def obtener_ranking_cohere(lista_texto_plano, hora_formateada_cst):
-    """Opción 2: Si Gemini falla, intenta con Cohere."""
-    if not COHERE_API_KEY:
-        print("  > INFO: Clave de Cohere no disponible.")
-        return None
-    print("Intentando con Opción 2: Cohere...")
-    try:
-        co = cohere.Client(COHERE_API_KEY)
-        prompt = f"La hora actual es {hora_formateada_cst}. De la siguiente lista de eventos, escoge los 3 más relevantes para una audiencia de México y USA que aún no hayan finalizado. Tienes que excluir ligas femeninas como WNBA o Liga MX Femenil. Debes priorizar eventos de alto interés como Liga MX, NFL, MLB, NBA, Boxeo/UFC y partidos de equipos muy populares como América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees. Responde únicamente con los 3 nombres de los eventos, cada uno en una línea nueva, sin texto introductorio ni explicaciones.\n\nLISTA DE EVENTOS:\n{lista_texto_plano}"
         
-        response = co.chat(message=prompt, model="command-r-plus-08-2024", temperature=0.2)
+        cst_offset = timezone(timedelta(hours=-6))
+        hora_actual_cst = datetime.now(cst_offset)
+        hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p CST')
         
-        ranking = [linea.strip().replace('*','').replace('- ','') for linea in response.text.strip().split('\n') if linea.strip()]
-        if ranking:
-            print(f"  > ÉXITO con Cohere. Ranking: {ranking}")
-            return ranking
-        return None
-    except Exception as e:
-        print(f"  > FALLO Cohere: {e}")
-        return None
-
-def obtener_ranking_fallback_simple(lista_eventos):
-    """Opción 3: Si todo falla, una selección simple y segura."""
-    print("Usando Opción 3: Fallback Simple...")
-    palabras_prohibidas = ["Femenil", "WNBA", "NWSL"]
-    ranking = []
-    for evento in lista_eventos:
-        if not any(keyword in evento.get("evento_principal", "") for keyword in palabras_prohibidas):
+        eventos_para_analizar = []
+        for evento in lista_eventos:
             for partido in evento.get("partidos", []):
-                descripcion = partido.get("descripcion")
-                if descripcion:
-                    ranking.append(descripcion)
-                    if len(ranking) >= 3:
-                        print(f"  > ÉXITO con Fallback. Ranking: {ranking}")
-                        return ranking
-    return ranking
+                eventos_para_analizar.append(f"{partido.get('descripcion', '')} {partido.get('horarios', '')}".strip())
+        
+        lista_texto_plano = "\n".join(filter(None, set(eventos_para_analizar)))
+        if not lista_texto_plano:
+            print("No se encontraron eventos para analizar.")
+            return []
+
+        # Prompt ahora pide 5 eventos y ya no contiene la regla de exclusión
+        prompt = f"""
+        Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
+        La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
+        Tu tarea es analizar la siguiente lista de eventos y determinar los 5 más relevantes para esta audiencia.
+
+        Reglas de Ranking:
+        1.  **REGLA DE TIEMPO:** Ignora eventos que ya hayan finalizado.
+        2.  **REGLA DE INTERÉS:** Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, Boxeo/UFC y partidos de equipos populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
+
+        Formato de Salida:
+        - Devuelve ÚNICAMENTE la descripción exacta de los 5 eventos que seleccionaste, en orden del más al menos relevante.
+        - Cada descripción debe estar en una nueva línea.
+        - NO incluyas números, viñetas, comillas, explicaciones o texto introductorio.
+
+        LISTA DE EVENTOS PARA ANALIZAR:
+        {lista_texto_plano}
+        """
+
+        response = model.generate_content(prompt, request_options={'timeout': 120})
+        ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
+        
+        print(f"Ranking de Gemini (Top 5 crudo) recibido: {ranking_limpio}")
+        return ranking_limpio
+
+    except Exception as e:
+        print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
+        return None
 
 # --- 3. FUNCIÓN PRINCIPAL ---
 def main():
@@ -86,58 +80,72 @@ def main():
         respuesta.raise_for_status()
         datos = respuesta.json()
         lista_eventos_original = datos.get("eventos", [])
-        if not lista_eventos_original: raise ValueError("El archivo events.json está vacío.")
+        if not lista_eventos_original:
+            raise ValueError("El archivo events.json está vacío.")
         print("Archivo events.json leído correctamente.")
     except Exception as e:
         print(f"ERROR FATAL al leer el archivo JSON: {e}")
         return
 
-    cst_offset = timezone(timedelta(hours=-6))
-    hora_actual_cst = datetime.now(cst_offset)
-    hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p CST')
-    eventos_para_analizar_texto = []
-    for evento in lista_eventos_original:
-        for partido in evento.get("partidos", []):
-            eventos_para_analizar_texto.append(f"{partido.get('descripcion', '')} {partido.get('horarios', '')}".strip())
-    lista_texto_plano = "\n".join(filter(None, set(eventos_para_analizar_texto)))
+    ranking_crudo = obtener_ranking_eventos(lista_eventos_original)
 
-    ranking_final = obtener_ranking_gemini(lista_texto_plano, hora_formateada_cst)
-    if ranking_final is None:
-        ranking_final = obtener_ranking_cohere(lista_texto_plano, hora_formateada_cst)
-    if ranking_final is None:
-        ranking_final = obtener_ranking_fallback_simple(lista_eventos_original)
-
-    if not ranking_final:
-        print("No se pudo obtener ranking por ningún método. El archivo de relevantes se creará vacío.")
+    if ranking_crudo is None:
+        print("Fallo en la API de Gemini. Se generará una lista de relevantes vacía para limpiar la página.")
         eventos_relevantes = []
     else:
-        print("Construyendo el JSON de eventos relevantes...")
-        eventos_relevantes = []
-        descripciones_ya_anadidas = set()
-        for desc_relevante in ranking_final:
-            if len(eventos_relevantes) >= 3: break
+        # --- INICIO DE LA NUEVA LÓGICA DE FILTRADO POR CÓDIGO ---
+        print("2. Aplicando filtro de exclusión por código...")
+        palabras_prohibidas = ["Femenil", "WNBA", "NWSL"]
+        ranking_filtrado = []
+        
+        # Primero, encontramos los objetos de evento completos que coinciden con el ranking
+        eventos_rankeados_completos = []
+        descripciones_rankeadas_unicas = set()
+
+        for desc_relevante in ranking_crudo:
             encontrado = False
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
                     descripcion_corta = partido.get("descripcion", "")
-                    if descripcion_corta and desc_relevante in descripcion_corta and descripcion_corta not in descripciones_ya_anadidas:
-                        evento_relevante = {"evento_principal": evento["evento_principal"], "detalle_evento": evento.get("detalle_evento", ""), "partidos": [partido]}
-                        eventos_relevantes.append(evento_relevante)
-                        descripciones_ya_anadidas.add(descripcion_corta)
+                    if descripcion_corta and descripcion_corta in desc_relevante and descripcion_corta not in descripciones_rankeadas_unicas:
+                        # Guardamos el evento completo y la descripción para filtrar
+                        eventos_rankeados_completos.append((evento, partido))
+                        descripciones_rankeadas_unicas.add(descripcion_corta)
                         encontrado = True
                         break
-                if encontrado: break
+                if encontrado:
+                    break
+        
+        # Ahora, filtramos esa lista de eventos completos
+        eventos_relevantes = []
+        for evento, partido in eventos_rankeados_completos:
+            if len(eventos_relevantes) >= 3:
+                break
+            
+            evento_principal = evento.get("evento_principal", "")
+            if not any(keyword in evento_principal for keyword in palabras_prohibidas):
+                evento_relevante = {
+                    "evento_principal": evento_principal,
+                    "detalle_evento": evento.get("detalle_evento", ""),
+                    "partidos": [partido]
+                }
+                eventos_relevantes.append(evento_relevante)
+        # --- FIN DE LA NUEVA LÓGICA DE FILTRADO ---
+        
+        print(f"Ranking final después de aplicar filtros: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes]}")
     
     json_salida = {"eventos_relevantes": eventos_relevantes}
 
-    print(f"Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
+    print(f"4. Guardando archivo local '{NOMBRE_ARCHIVO_SALIDA}'...")
     with open(NOMBRE_ARCHIVO_SALIDA, 'w', encoding='utf-8') as f:
         json.dump(json_salida, f, indent=4, ensure_ascii=False)
     print("Archivo local guardado.")
     
-    if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]): return
+    if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
+        print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
+        return
     
-    print(f"Subiendo '{NOMBRE_ARCHIVO_SALIDA}' al servidor FTP...")
+    print(f"5. Subiendo '{NOMBRE_ARCHIVO_SALIDA}' al servidor FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
