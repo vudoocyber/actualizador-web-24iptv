@@ -19,28 +19,17 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
     texto = evento_principal.lower()
-    if any(keyword in texto for keyword in ["fútbol", "liga", "copa", "championship", "eredivise", "superliga", "⚽"]):
-        return "futbol"
-    if any(keyword in texto for keyword in ["nfl", "cfl", "🏈"]):
-        return "futbol_americano"
-    if any(keyword in texto for keyword in ["mlb", "beisbol", "⚾"]):
-        return "beisbol"
-    if any(keyword in texto for keyword in ["nba", "wnba", "cibacopa", "🏀"]):
-        return "baloncesto"
-    if any(keyword in texto for keyword in ["ufc", "box", "wrestling", "🤼", "🥊"]):
-        return "combate"
-    if any(keyword in texto for keyword in ["tenis", "open", "🎾"]):
-        return "tenis"
-    if any(keyword in texto for keyword in ["nascar", "racing", "🏎️"]):
-        return "carreras"
-    if any(keyword in texto for keyword in ["golf", "pga", "liv", "⛳"]):
-        return "golf"
-    if any(keyword in texto for keyword in ["voleybol", "volleyball", "🏐"]):
-        return "voleibol"
-    if any(keyword in texto for keyword in ["rugby", "🏉"]):
-        return "rugby"
-    if any(keyword in texto for keyword in ["nhl", "hockey", "🏒"]):
-        return "hockey"
+    if any(keyword in texto for keyword in ["fútbol", "liga", "copa", "championship", "eredivise", "superliga", "⚽"]): return "futbol"
+    if any(keyword in texto for keyword in ["nfl", "cfl", "🏈"]): return "futbol_americano"
+    if any(keyword in texto for keyword in ["mlb", "beisbol", "⚾"]): return "beisbol"
+    if any(keyword in texto for keyword in ["nba", "wnba", "cibacopa", "🏀"]): return "baloncesto"
+    if any(keyword in texto for keyword in ["ufc", "box", "wrestling", "🤼", "🥊"]): return "combate"
+    if any(keyword in texto for keyword in ["tenis", "open", "🎾"]): return "tenis"
+    if any(keyword in texto for keyword in ["nascar", "racing", "🏎️"]): return "carreras"
+    if any(keyword in texto for keyword in ["golf", "pga", "liv", "⛳"]): return "golf"
+    if any(keyword in texto for keyword in ["voleybol", "volleyball", "🏐"]): return "voleibol"
+    if any(keyword in texto for keyword in ["rugby", "🏉"]): return "rugby"
+    if any(keyword in texto for keyword in ["nhl", "hockey", "🏒"]): return "hockey"
     return "default"
 
 def extraer_hora_centro(horario_str):
@@ -51,8 +40,6 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    # --- LÍNEA CORREGIDA ---
-    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
     match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     hora, minuto, periodo = match.groups()
@@ -75,7 +62,7 @@ def obtener_url_resultado_gemini(busqueda_precisa, fecha_evento):
         FECHA DEL EVENTO: "{fecha_evento}"
 
         Responde ÚNICAMENTE con la URL. No añadas explicaciones ni ningún otro texto.
-        Ejemplo de respuesta: https://www.google.com/search?q=resultado+{busqueda_precisa.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
+        Ejemplo de respuesta: https://www.google.com/search?q={busqueda_precisa.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
         """
         
         response = model.generate_content(prompt, request_options={'timeout': 90})
@@ -121,22 +108,6 @@ def main():
     hora_actual_float = hora_actual_mexico.hour + (hora_actual_mexico.minute / 60.0)
     print(f"Hora actual (Ciudad de México): {hora_actual_mexico.strftime('%I:%M %p %Z')}")
     
-    emoji_pattern = re.compile(
-        "["
-        u"\U0001F600-\U0001F64F"  # emoticons
-        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        u"\u2600-\u26FF"  # miscellaneous symbols
-        u"\u2700-\u27BF"  # dingbats
-        u"\u2B50"
-        u"\U0001f900-\U0001f9ff"
-        u"\U0001fa70-\U0001fa73"
-        u"\U0001fa78-\U0001fa7a"
-        u"\U0001fa80-\U0001fa82"
-        u"\U0001fa90-\U0001fa95"
-        "]+", flags=re.UNICODE)
-
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
         
@@ -155,11 +126,10 @@ def main():
             if hora_actual_float > hora_ct_24 + tiempo_de_espera:
                 print(f"- Partido finalizado detectado ({deporte_actual}): {partido['descripcion']}")
                 
-                evento_principal_limpio = emoji_pattern.sub('', evento['evento_principal']).strip()
-                if "resultado" in evento_principal_limpio.lower():
-                    busqueda_precisa = f"{evento_principal_limpio} {partido['descripcion']}"
-                else:
-                    busqueda_precisa = f"Resultado {evento_principal_limpio} {partido['descripcion']}"
+                # --- INICIO DE LA CORRECCIÓN ---
+                # Ahora la búsqueda solo incluye la descripción del partido y la palabra "Resultado"
+                busqueda_precisa = f"Resultado {partido['descripcion']}"
+                # --- FIN DE LA CORRECCIÓN ---
                 
                 url = obtener_url_resultado_gemini(busqueda_precisa, fecha_extraida)
                 if url:
