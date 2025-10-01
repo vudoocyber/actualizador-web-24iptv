@@ -2,7 +2,7 @@ import requests
 import json
 import os
 from ftplib import FTP
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pytz
 import re
 import google.generativeai as genai
@@ -18,30 +18,18 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
-    """Analiza el título de un evento para determinar el deporte."""
     texto = evento_principal.lower()
-    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto:
-        return "futbol"
-    if "nfl" in texto or "cfl" in texto or "🏈" in texto:
-        return "futbol_americano"
-    if "mlb" in texto or "beisbol" in texto or "⚾" in texto:
-        return "beisbol"
-    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto:
-        return "baloncesto"
-    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto:
-        return "combate"
-    if "tenis" in texto or "open" in texto or "🎾" in texto:
-        return "tenis"
-    if "nascar" in texto or "racing" in texto or "🏎️" in texto:
-        return "carreras"
-    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto:
-        return "golf"
-    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto:
-        return "voleibol"
-    if "rugby" in texto or "🏉" in texto:
-        return "rugby"
-    if "nhl" in texto or "hockey" in texto or "🏒" in texto:
-        return "hockey"
+    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto: return "futbol"
+    if "nfl" in texto or "cfl" in texto or "🏈" in texto: return "futbol_americano"
+    if "mlb" in texto or "beisbol" in texto or "⚾" in texto: return "beisbol"
+    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto: return "baloncesto"
+    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto: return "combate"
+    if "tenis" in texto or "open" in texto or "🎾" in texto: return "tenis"
+    if "nascar" in texto or "racing" in texto or "🏎️" in texto: return "carreras"
+    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto: return "golf"
+    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto: return "voleibol"
+    if "rugby" in texto or "🏉" in texto: return "rugby"
+    if "nhl" in texto or "hockey" in texto or "🏒" in texto: return "hockey"
     return "default"
 
 def extraer_hora_centro(horario_str):
@@ -52,7 +40,9 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    match = re.search(r'(\d+)(?::\d+))?\s*(am|pm)', hora_str)
+    # --- LÍNEA CORREGIDA ---
+    # Se eliminó el paréntesis extra que causaba el error de sintaxis.
+    match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     hora, minuto, periodo = match.groups()
     hora = int(hora)
@@ -118,7 +108,7 @@ def main():
             horario_str = partido.get("horarios", "")
             hora_centro_str = extraer_hora_centro(horario_str)
             if not hora_centro_str: continue
-            hora_ct_24 = convertir_hora_a_24h(horario_str)
+            hora_ct_24 = convertir_hora_a_24h(hora_centro_str)
             if hora_ct_24 is None: continue
             if hora_actual_float > hora_ct_24 + tiempo_de_espera:
                 partidos_a_consultar.append(partido['descripcion'])
