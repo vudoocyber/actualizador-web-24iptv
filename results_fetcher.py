@@ -16,34 +16,21 @@ FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIONES AUXILIARES Y DE LÓGICA ---
-
+# --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
-    """Analiza el título de un evento para determinar el deporte."""
     texto = evento_principal.lower()
-    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto:
-        return "futbol"
-    if "nfl" in texto or "cfl" in texto or "🏈" in texto:
-        return "futbol_americano"
-    if "mlb" in texto or "beisbol" in texto or "⚾" in texto:
-        return "beisbol"
-    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto:
-        return "baloncesto"
-    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto:
-        return "combate"
-    if "tenis" in texto or "open" in texto or "🎾" in texto:
-        return "tenis"
-    if "nascar" in texto or "racing" in texto or "🏎️" in texto:
-        return "carreras"
-    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto:
-        return "golf"
-    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto:
-        return "voleibol"
-    if "rugby" in texto or "🏉" in texto:
-        return "rugby"
-    if "nhl" in texto or "hockey" in texto or "🏒" in texto:
-        return "hockey"
-    return "default" # Si no se identifica, usamos un tiempo estándar
+    if "fútbol" in texto or "liga" in texto or "copa" in texto or "championship" in texto or "eredivise" in texto or "superliga" in texto or "⚽" in texto: return "futbol"
+    if "nfl" in texto or "cfl" in texto or "🏈" in texto: return "futbol_americano"
+    if "mlb" in texto or "beisbol" in texto or "⚾" in texto: return "beisbol"
+    if "nba" in texto or "wnba" in texto or "cibacopa" in texto or "🏀" in texto: return "baloncesto"
+    if "ufc" in texto or "box" in texto or "wrestling" in texto or "🤼" in texto or "🥊" in texto: return "combate"
+    if "tenis" in texto or "open" in texto or "🎾" in texto: return "tenis"
+    if "nascar" in texto or "racing" in texto or "🏎️" in texto: return "carreras"
+    if "golf" in texto or "pga" in texto or "liv" in texto or "⛳" in texto: return "golf"
+    if "voleybol" in texto or "volleyball" in texto or "🏐" in texto: return "voleibol"
+    if "rugby" in texto or "🏉" in texto: return "rugby"
+    if "nhl" in texto or "hockey" in texto or "🏒" in texto: return "hockey"
+    return "default"
 
 def extraer_hora_centro(horario_str):
     match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:a\.m\.|p\.m\.|am|pm))\s+Centro', horario_str, re.IGNORECASE)
@@ -53,7 +40,6 @@ def extraer_hora_centro(horario_str):
 def convertir_hora_a_24h(hora_str):
     if not hora_str: return None
     hora_str = hora_str.lower().replace('.', '')
-    # Expresión regular verificada y corregida
     match = re.search(r'(\d+)(?::(\d+))?\s*(am|pm)', hora_str)
     if not match: return None
     hora, minuto, periodo = match.groups()
@@ -68,28 +54,24 @@ def obtener_url_resultado_gemini(busqueda_precisa, fecha_evento):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.5-flash')
-        
         prompt = f"""
         Actúa como un asistente de búsqueda. Tu única tarea es generar la URL de búsqueda de Google más probable para encontrar el resultado final del siguiente evento que se jugó en la fecha indicada.
-        
         BÚSQUEDA: "{busqueda_precisa}"
         FECHA DEL EVENTO: "{fecha_evento}"
-
-        Responde ÚNICAMENTE con la URL. No añadas explicaciones ni ningún otro texto.
-        Ejemplo de respuesta: https://www.google.com/search?q=resultado+{busqueda_precisa.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
+        Responde ÚNICAMENTE con la URL.
+        Ejemplo: https://www.google.com/search?q=resultado+{busqueda_precisa.replace(" ", "+")}+{fecha_evento.replace(" ", "+")}
         """
-        
         response = model.generate_content(prompt, request_options={'timeout': 90})
         url_resultado = response.text.strip()
         if url_resultado.startswith("http"):
-            print(f"  > URL de Gemini generada: {url_resultado}")
+            print(f"  > URL de Gemini generada para '{busqueda_precisa}'")
             return url_resultado
         return None
     except Exception as e:
-        print(f"  > ERROR al contactar con Gemini: {e}")
+        print(f"  > ERROR al contactar con Gemini para '{busqueda_precisa}': {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL (LÓGICA ACTUALIZADA) ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
     mexico_city_tz = pytz.timezone("America/Mexico_City")
@@ -101,7 +83,6 @@ def main():
         datos = respuesta.json()
         lista_eventos_original = datos.get("eventos", [])
         titulo_guia = datos.get("titulo_guia", "")
-        # Limpiamos el año del string de fecha para evitar duplicados en la búsqueda
         fecha_extraida = re.sub('<[^<]+?>', '', titulo_guia).split(',')[-1].strip().replace(str(datetime.now().year), "").strip()
         if not lista_eventos_original or not fecha_extraida:
             raise ValueError("El archivo events.json está vacío o no contiene una fecha en el título.")
@@ -113,7 +94,6 @@ def main():
     print("2. Identificando partidos finalizados y buscando URLs de resultados...")
     resultados_finales = []
     
-    # DICCIONARIO DE DURACIONES POR DEPORTE
     duracion_por_deporte = {
         "futbol": 2.0, "futbol_americano": 3.5, "beisbol": 3.0, "baloncesto": 2.5,
         "combate": 3.0, "tenis": 2.5, "carreras": 3.5, "golf": 4.5,
@@ -123,6 +103,22 @@ def main():
     hora_actual_mexico = datetime.now(mexico_city_tz)
     hora_actual_float = hora_actual_mexico.hour + (hora_actual_mexico.minute / 60.0)
     print(f"Hora actual (Ciudad de México): {hora_actual_mexico.strftime('%I:%M %p %Z')}")
+    
+    # Expresión regular para eliminar emojis
+    emoji_pattern = re.compile("["
+        u"\U0001F600-\U0001F64F"  # emoticons
+        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+        u"\U0001F680-\U0001F6FF"  # transport & map symbols
+        u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        u"\u2600-\u26FF"  # miscellaneous symbols
+        u"\u2700-\u27BF"  # dingbats
+        u"\u2B50"
+        u"\U0001f900-\U0001f9ff"
+        u"\U0001fa70-\U0001fa73"
+        u"\U0001fa78-\U0001fa7a"
+        u"\U0001fa80-\U0001fa82"
+        u"\U0001fa90-\U0001fa95"
+        "]+", flags=re.UNICODE)
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
@@ -140,10 +136,13 @@ def main():
             if hora_ct_24 is None: continue
             
             if hora_actual_float > hora_ct_24 + tiempo_de_espera:
-                print(f"- Partido finalizado detectado ({deporte_actual}, dura {tiempo_de_espera}h): {partido['descripcion']}")
+                print(f"- Partido finalizado detectado ({deporte_actual}): {partido['descripcion']}")
                 
-                # NUEVA CONSTRUCCIÓN DE LA BÚSQUEDA
-                busqueda_precisa = f"Resultado {evento['evento_principal']} {partido['descripcion']}"
+                # --- INICIO DE LA CORRECCIÓN ---
+                # Limpiamos los emojis del título del evento antes de crear la búsqueda
+                evento_principal_limpio = emoji_pattern.sub('', evento['evento_principal']).strip()
+                busqueda_precisa = f"Resultado {evento_principal_limpio} {partido['descripcion']}"
+                # --- FIN DE LA CORRECCIÓN ---
                 
                 url = obtener_url_resultado_gemini(busqueda_precisa, fecha_extraida)
                 if url:
