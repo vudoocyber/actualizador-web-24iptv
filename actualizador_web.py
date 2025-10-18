@@ -14,34 +14,12 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 NOMBRE_ARCHIVO_JSON = 'events.json'
-NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# Las constantes de Telegram han sido eliminadas.
 
-# --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
-def aplicar_reglas_html(texto_crudo):
-    resultado_html = ""
-    REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
-    PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
-    lineas = texto_crudo.strip().split('\n')
-    year_actual = datetime.now().year
-    
-    for linea in lineas:
-        linea = linea.strip()
-        if not linea: continue
-        if linea.startswith("Eventos Deportivos"):
-            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
-            resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
-        elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
-            resultado_html += f"<h3>{linea}</h3><br /><br />\n"
-        elif any(keyword in linea for keyword in PALABRAS_CLAVE):
-            resultado_html += f"<p>{linea}</p><br /><br />\n"
-        else:
-            resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
-    return resultado_html
-
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
+# --- 2. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -88,123 +66,37 @@ Dale clic al enlace y entérate de todo en segundos 👇
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
-    return mensaje_html_final
+    
+    return mensaje_html_final # Retorna solo el HTML, como en tu código funcional original
 
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI (SIMPLIFICADA, SIN RETORNO DE RANKING) ---
+# --- 3. FUNCIONES DE GEMINI (ELIMINADAS/SIMPLIFICADAS) ---
 def obtener_ranking_eventos(texto_crudo):
-    # Ya que el ranking se elimina, esta función solo devuelve una lista vacía para no romper el flujo.
-    print("ADVERTENCIA: La funcionalidad de ranking ha sido eliminada. Se devuelve una lista vacía.")
+    # Función que solía usar Gemini, pero ahora devuelve una lista vacía para no romper el flujo de JSON.
+    print("ADVERTENCIA: La funcionalidad de ranking con Gemini ha sido eliminada. Se devuelve una lista vacía.")
     return []
 
-# --- 5. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES CORREGIDA) ---
-def crear_json_eventos(texto_crudo, ranking_relevancia):
+# --- 4. FUNCIÓN JSON (SIN TARJETAS ESPECIALES) ---
+def crear_json_eventos(texto_crudo, ranking):
+    """
+    Crea el archivo events.json con el texto crudo para que scripts subsiguientes lo procesen,
+    respetando la estructura simple que se requiere.
+    """
+    data = {
+        "fecha_extraccion": datetime.now().isoformat(),
+        "contenido_texto_crudo": texto_crudo,
+        "ranking_eventos": ranking # Se incluye el ranking vacío
+    }
     
-    REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
+    try:
+        contenido_json = json.dumps(data, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error al serializar el JSON: {e}")
+        return "{}"
 
-    # --- NUEVA FUNCIÓN INTERNA PARA IDENTIFICAR TÍTULOS ---
-    def es_linea_de_titulo(linea):
-        # Casos explícitos que siempre son títulos de un nuevo evento
-        if "WWE Wrestling" in linea or "Evento BOX" in linea:
-            return True
-        
-        # Un título general tiene un emoji
-        if REGEX_EMOJI.search(linea):
-            # Y NO parece un partido (no contiene 'vs', 'va' ni horarios explícitos)
-            if not any(keyword in linea.lower() for keyword in ["vs", "va", " a las ", " pm ", " am ", "p.m."]):
-                return True
-        return False
+    return contenido_json
 
-    def parsear_linea_partido(linea_partido):
-        partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
-        linea_limpia = linea_partido.strip()
-        
-        descripcion_y_horarios = linea_limpia
-        if " por " in linea_limpia:
-            partes = linea_limpia.split(" por ", 1)
-            descripcion_y_horarios = partes[0]
-            canales_texto = partes[1].replace(" y ", ", ")
-            partido["canales"] = [c.strip() for c in canales_texto.split(',')]
 
-        frases_split = r'\s+a las\s+|\s+a partir de las\s+'
-        if re.search(frases_split, descripcion_y_horarios, re.IGNORECASE):
-            partes = re.split(frases_split, descripcion_y_horarios, 1, re.IGNORECASE)
-            partido["descripcion"], partido["horarios"] = partes[0].strip(), partes[1].strip()
-        else:
-            match_horario = re.search(r'\d', descripcion_y_horarios)
-            if match_horario:
-                pos_inicio = match_horario.start()
-                partido["descripcion"] = descripcion_y_horarios[:pos_inicio].strip()
-                partido["horarios"] = descripcion_y_horarios[pos_inicio:].strip()
-            else:
-                partido["descripcion"] = descripcion_y_horarios
-
-        if " vs " in partido["descripcion"]:
-            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
-        elif " va " in partido["descripcion"]:
-            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" va ")]
-            
-        return partido
-
-    datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
-    lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
-    
-    bloques_evento = []
-    bloque_actual = []
-    for linea in lineas:
-        if "Eventos Deportivos" in linea:
-            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
-            year_actual = datetime.now().year
-            titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
-            datos_json["titulo_guia"] = titulo_completo_html
-            continue
-        if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
-            continue
-        
-        if es_linea_de_titulo(linea) and bloque_actual:
-            bloques_evento.append(bloque_actual)
-            bloque_actual = [linea]
-        else:
-            bloque_actual.append(linea)
-    if bloque_actual: bloques_evento.append(bloque_actual)
-
-    lista_eventos_original = []
-    for bloque in bloques_evento:
-        if not bloque: continue
-        evento_principal = bloque[0]
-        evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
-        contenido = bloque[1:]
-        
-        detalles_previos = []
-        for linea in contenido:
-            if any(keyword in linea for keyword in ["Este", "Centro", "Pacífico", "partir de las"]):
-                partido_info = parsear_linea_partido(linea)
-                partido_info["detalle_partido"] = " ".join(detalles_previos).strip()
-                if not partido_info["descripcion"] and detalles_previos:
-                    partido_info["descripcion"] = detalles_previos[-1]
-                partido_info["organizador"] = evento_principal
-                evento_json["partidos"].append(partido_info)
-                detalles_previos = []
-            else:
-                detalles_previos.append(linea)
-        
-        if detalles_previos:
-            partido_info = parsear_linea_partido(detalles_previos[-1])
-            partido_info["detalle_partido"] = " ".join(detalles_previos[:-1]).strip()
-            partido_info["organizador"] = evento_principal
-            evento_json["partidos"].append(partido_info)
-        
-        if evento_json["partidos"]:
-            lista_eventos_original.append(evento_json)
-
-    # --- LÓGICA DE RANKING Y TARJETAS ESPECIALES ELIMINADA AQUÍ ---
-    # eventos_relevantes_especiales = []
-    # (El código que usaba ranking_relevancia para crear tarjetas se ha removido)
-    
-    # El JSON solo contendrá la lista de eventos originales
-    datos_json["eventos"] = lista_eventos_original
-    return json.dumps(datos_json, indent=4, ensure_ascii=False)
-
-# --- 6. FUNCIÓN PARA GENERAR EL SITEMAP ---
+# --- 5. FUNCIÓN PARA CREAR SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -220,7 +112,8 @@ def crear_sitemap():
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
-# --- 7. FUNCIÓN PRINCIPAL ---
+
+# --- 6. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
@@ -240,22 +133,32 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    # El ranking es una lista vacía ya que la funcionalidad ha sido eliminada
-    ranking = []
-
-    print("2. Generando contenido para los 4 archivos...")
-    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking)
-    contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
+    ranking = obtener_ranking_eventos(texto_extraido_filtrado)
+    
+    print("2. Generando contenido para los 3 archivos...")
+    # Solo llamamos una vez a crear_mensaje_whatsapp
     contenido_mensaje_whatsapp = crear_mensaje_whatsapp(texto_extraido_filtrado)
+    
+    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking) 
+    
+    # La función aplicar_reglas_html ha sido eliminada
     crear_sitemap()
     print("Contenido generado.")
 
     print("3. Guardando archivos locales...")
+    archivos_a_subir = []
     try:
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
-        with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
+        archivos_a_subir.append(NOMBRE_ARCHIVO_JSON)
+
+        # NOMBRE_ARCHIVO_PROGRAMACION ha sido eliminado
+        
         with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_mensaje_whatsapp)
-        print(f"Archivos locales guardados: {NOMBRE_ARCHIVO_JSON}, {NOMBRE_ARCHIVO_PROGRAMACION}, {NOMBRE_ARCHIVO_MENSAJE}, {NOMBRE_ARCHIVO_SITEMAP}.")
+        archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
+
+        archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
+        
+        print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
     except Exception as e:
         print(f"Error al guardar archivos locales: {e}")
         return
@@ -269,7 +172,7 @@ def main():
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP]:
+            for nombre_archivo in archivos_a_subir:
                 with open(nombre_archivo, 'rb') as file:
                     print(f"Subiendo '{nombre_archivo}'...")
                     ftp.storbinary(f'STOR {nombre_archivo}', file)
