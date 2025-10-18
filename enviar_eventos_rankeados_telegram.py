@@ -52,7 +52,7 @@ MENSAJE_PLANTILLAS = [
     },
     # 5. Estilo "Vibrante"
     {
-        "titulo": "🤩 *¡VIBRA CON EL PARTIDO ESTELAR!* 🤩",
+        "titulo": "🤩 *¡VIBRA CON!* 🤩",
         "cuerpo": "⚽ Evento: *{competidores}*\n🗓️ Fecha: {detalle_partido}\n⌚ ¡Prepara el reloj! *{horarios}*\n📺 Velo en HD: _{canales}_",
         "cierre": "🔥 ¡La emoción está asegurada! Míralo aquí:\n"
     },
@@ -82,7 +82,7 @@ MENSAJE_PLANTILLAS = [
     },
     # 10. Estilo "Deportivo"
     {
-        "titulo": "⚽ *EL PARTIDO MÁS ESPERADO* 🏀",
+        "titulo": " 💥*EL PARTIDO MÁS ESPERADO* 💥",
         "cuerpo": "*{organizador}*\n🏆 Competencia: *{competidores}*\n⏱️ Horario de inicio: *{horarios}*\n📡 Cobertura total: _{canales}_",
         "cierre": "¡Prepárate! Enlace a la guía completa:\n"
     }
