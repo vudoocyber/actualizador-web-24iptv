@@ -14,15 +14,35 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 NOMBRE_ARCHIVO_JSON = 'events.json'
-# NOMBRE_ARCHIVO_PROGRAMACION ELIMINADO
+NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # NUEVA CONSTANTE
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA (ELIMINADA) ---
-# Se eliminó aplicar_reglas_html
+# --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
+def aplicar_reglas_html(texto_crudo):
+    resultado_html = ""
+    REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
+    PALABRAS_CLAVE = ["Este", "Centro", "Pacífico"]
+    lineas = texto_crudo.strip().split('\n')
+    year_actual = datetime.now().year
+    
+    for linea in lineas:
+        linea = linea.strip()
+        if not linea: continue
+        if linea.startswith("Eventos Deportivos"):
+            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
+            resultado_html += f"<h2>Eventos Deportivos y Especiales, {year_actual} <br /><br />\n{fecha_texto} <br /><br /><br />\n"
+        elif "WWE Wrestling" in linea or REGEX_EMOJI.search(linea) or "Evento BOX" in linea:
+            resultado_html += f"<h3>{linea}</h3><br /><br />\n"
+        elif any(keyword in linea for keyword in PALABRAS_CLAVE):
+            resultado_html += f"<p>{linea}</p><br /><br />\n"
+        else:
+            resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
+    return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (MODIFICADA LA SALIDA) ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -69,67 +89,39 @@ Dale clic al enlace y entérate de todo en segundos 👇
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
-    return mensaje_html_final
+    
+    # MODIFICACIÓN: Retornamos AMBOS: HTML para la web y Texto Puro para el nuevo archivo TXT
+    return mensaje_html_final, mensaje_texto_puro 
 
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI ---
-def obtener_ranking_eventos(texto_crudo):
-    if not GEMINI_API_KEY:
-        print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
-        return []
 
-    print("Contactando a la IA de Gemini con prompt optimizado para audiencia México/USA...")
+# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA MENSAJERÍA (NUEVA) ---
+def generar_archivo_telegram_txt(mensaje_texto_puro):
+    """
+    Genera un archivo de texto plano con codificación UTF-8.
+    """
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        lineas = texto_crudo.strip().split('\n')
-        PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las", " por "]
-        eventos_para_analizar = []
-        for linea in lineas:
-            linea_limpia = linea.strip()
-            if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
-                try:
-                    descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
-                    descripcion = descripcion.split(" por ")[0]
-                    eventos_para_analizar.append(descripcion.strip())
-                except:
-                    continue
-            elif "Pelea Estelar" in linea_limpia:
-                 eventos_para_analizar.append(linea_limpia)
-
-        lista_texto_plano = "\n".join(set(eventos_para_analizar))
-
-        prompt = f"""
-        Actúa como un analista experto en tendencias de entretenimiento para una audiencia de México y Estados Unidos (USA).
-        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes para esta audiencia específica.
-        Para determinar la relevancia, prioriza de la siguiente manera:
-        1.  **Alto Interés Regional:** Da máxima prioridad a eventos de la Liga MX, NFL, MLB, NBA y peleas de boxeo importantes.
-        2.  **Relevancia Cultural General:** Considera conciertos, estrenos de TV o eventos de cultura pop muy esperados.
-        3.  **Popularidad en Búsquedas y Redes Sociales:** Evalúa qué eventos están generando más conversación.
-        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos, cada uno en una línea nueva, en orden del más al menos relevante.
-        Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con una de las líneas que te proporcioné.
-        NO incluyas números, viñetas, comillas, explicaciones, o cualquier texto introductorio.
-
-        LISTA DE EVENTOS PARA ANALIZAR:
-        {lista_texto_plano}
-        """
-
-        response = model.generate_content(prompt, request_options={'timeout': 120})
-        ranking_limpio = [re.sub(r'^[*-]?\s*', '', linea).strip() for linea in response.text.strip().split('\n') if linea.strip()]
-        
-        print(f"Ranking de Gemini (optimizado) recibido: {ranking_limpio}")
-        return ranking_limpio
-
+        # Escribimos el mensaje con codificación UTF-8 explícita
+        with open(NOMBRE_ARCHIVO_TELEGRAM, 'w', encoding='utf-8') as f:
+            f.write(mensaje_texto_puro)
+        print(f"Archivo de texto plano '{NOMBRE_ARCHIVO_TELEGRAM}' generado para mensajería.")
     except Exception as e:
-        print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
-        return []
+        print(f"Error al generar el archivo de texto plano para mensajería: {e}")
+        raise 
+    return NOMBRE_ARCHIVO_TELEGRAM
 
-# --- 5. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES CORREGIDA) ---
+
+# --- 5. FUNCIÓN PARA COMUNICARSE CON GEMINI (SIMPLIFICADA) ---
+def obtener_ranking_eventos(texto_crudo):
+    # Esta funcionalidad está eliminada, solo devuelve una lista vacía para no romper el JSON.
+    print("ADVERTENCIA: La funcionalidad de ranking ha sido eliminada.")
+    return []
+
+# --- 6. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES) ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
     
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
 
-    # --- FUNCIÓN INTERNA PARA IDENTIFICAR TÍTULOS ---
+    # Funciones internas para parseo del JSON...
     def es_linea_de_titulo(linea):
         if "WWE Wrestling" in linea or "Evento BOX" in linea:
             return True
@@ -224,7 +216,7 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
     datos_json["eventos"] = lista_eventos_original
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
-# --- 6. FUNCIÓN PARA GENERAR EL SITEMAP ---
+# --- 7. FUNCIÓN PARA GENERAR EL SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -240,7 +232,7 @@ def crear_sitemap():
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
-# --- 7. FUNCIÓN PRINCIPAL ---
+# --- 8. FUNCIÓN PRINCIPAL ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
@@ -260,13 +252,16 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    # El ranking es una lista vacía
     ranking = obtener_ranking_eventos(texto_extraido_filtrado)
 
-    print("2. Generando contenido para los 3 archivos...")
+    print("2. Generando contenido para los 4 archivos...")
+    # MODIFICACIÓN: Ahora obtenemos el HTML y el Texto Puro (para TXT)
+    contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
+    
     contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking)
-    # Se elimina contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
-    contenido_mensaje_whatsapp = crear_mensaje_whatsapp(texto_extraido_filtrado)
+    
+    contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
+    nombre_archivo_telegram_txt = generar_archivo_telegram_txt(contenido_texto_puro_telegram) # Genera el TXT
     crear_sitemap()
     print("Contenido generado.")
 
@@ -276,12 +271,14 @@ def main():
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
         archivos_a_subir.append(NOMBRE_ARCHIVO_JSON)
 
-        # Se elimina la subida de programacion.html
+        with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
+        archivos_a_subir.append(NOMBRE_ARCHIVO_PROGRAMACION)
         
-        with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_mensaje_whatsapp)
+        with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_html_mensaje)
         archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
 
         archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
+        archivos_a_subir.append(nombre_archivo_telegram_txt) # AÑADIDO: Archivo TXT
         
         print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
     except Exception as e:
