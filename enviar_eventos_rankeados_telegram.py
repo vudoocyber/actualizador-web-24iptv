@@ -83,21 +83,21 @@ def obtener_eventos_rankeados(url_ranking):
 
 def formatear_mensaje_telegram(evento):
     """
-    Crea un mensaje atractivo en formato Markdown para Telegram.
+    Crea un mensaje atractivo en formato Markdown para Telegram, utilizando emojis Unicode directos.
     """
     # Escapamos caracteres especiales de Markdown (., -, !, #, (, ), etc.)
     def escape_markdown(text):
-        return re.sub(r'([_*[\]()~`>#+\-=|{}.!])', r'\\\1', text)
+        # Escapamos los caracteres que Telegram podría interpretar como formato
+        # Solo escapamos los que no sean el asterisco usado para negritas
+        return re.sub(r'([\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
     # El evento rankeado es un objeto complejo (tiene "partidos")
     if evento.get('partidos'):
         partido_principal = evento['partidos'][0]
     else:
-        # Fallback si la estructura es plana
         partido_principal = evento 
 
     # Extracción segura de datos
-    desc = partido_principal.get('descripcion', 'Evento no especificado')
     horarios = partido_principal.get('horarios', 'Sin hora')
     canales = ", ".join(partido_principal.get('canales', ['Canal Desconocido']))
     competidores = " vs ".join(partido_principal.get('competidores', ['Competidores']))
@@ -105,27 +105,29 @@ def formatear_mensaje_telegram(evento):
     detalle_partido = partido_principal.get('detalle_partido', 'Ubicación Desconocida')
     
     # Asignamos un emoji basado en el contenido del organizador
+    clean_organizador = re.sub(r'[\U0001F300-\U0001F6FF\u2600-\u27BF]+', '', organizador).strip()
+    
     emoji = "⭐"
-    if "BOX" in organizador or "UFC" in organizador:
+    if "BOX" in clean_organizador or "UFC" in clean_organizador:
         emoji = "🥊"
-    elif "MX" in organizador or "Liga" in organizador or "⚽" in organizador:
+    elif "MX" in clean_organizador or "Liga" in clean_organizador or "⚽" in organizador:
         emoji = "⚽"
-    elif "NFL" in organizador or "🏈" in organizador:
+    elif "NFL" in clean_organizador or "🏈" in organizador:
         emoji = "🏈"
-    elif "NBA" in organizador or "WNBA" in organizador or "🏀" in organizador:
+    elif "NBA" in clean_organizador or "WNBA" in clean_organizador or "🏀" in organizador:
         emoji = "🏀"
-    elif "MLB" in organizador or "⚾" in organizador:
+    elif "MLB" in clean_organizador or "⚾" in organizador:
         emoji = "⚾"
         
-    # Construcción del mensaje en Markdown (usamos un formato simple para máxima compatibilidad)
+    # Construcción del mensaje con emojis Unicode y texto limpio
     mensaje = (
         f"{emoji} *¡EVENTO IMPERDIBLE DEL DÍA!* {emoji}\n\n"
         f"*{escape_markdown(organizador)}*\n"
-        f"ðŸ† Encuentro: *{escape_markdown(competidores)}*\n"
-        f"ðŸš Sede: {escape_markdown(detalle_partido)}\n"
-        f"â° Horario: *{escape_markdown(horarios)}*\n"
-        f"ðŸ“º Canales: _{escape_markdown(canales)}_\n\n"
-        f"âš¡ï¸ ¡No te lo pierdas! Mira la acción completa aquí:\n"
+        f"🏆 Encuentro: *{escape_markdown(competidores)}*\n"
+        f"🏟️ Sede: {escape_markdown(detalle_partido)}\n"
+        f"⏰ Horario: *{escape_markdown(horarios)}*\n"
+        f"📺 Canales: _{escape_markdown(canales)}_\n\n"
+        f"⚡ *¡No te lo pierdas!* Mira la acción aquí:\n"
         f"https://24hometv.xyz/"
     )
     return mensaje
