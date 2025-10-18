@@ -128,6 +128,149 @@ def obtener_ranking_eventos(texto_crudo):
         Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con una de las líneas que te proporcioné.
         NO incluyas números, viñetas, comillas, explicaciones, o cualquier texto introductorio.
 
+        LISTA DE EVENTOS PARA ANALIZAR:
+        {lista_texto_plano}
+        """
+
+        response = model.generate_content(prompt, request_options={'timeout': 120})
+        ranking_limpio = [re.sub(r'^[*-]?\s*', '', linea).strip() for linea in response.text.strip().split('\n') if linea.strip()]
+        
+        print(f"Ranking de Gemini (optimizado) recibido: {ranking_limpio}")
+        return ranking_limpio
+
+    except Exception as e:
+        print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
+        return []
+
+# --- 5. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES CORREGIDA) ---
+def crear_json_eventos(texto_crudo, ranking_relevancia):
+    
+    REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
+
+    # --- NUEVA FUNCIÓN INTERNA PARA IDENTIFICAR TÍTULOS ---
+    def es_linea_de_titulo(linea):
+        # Casos explícitos que siempre son títulos de un nuevo evento
+        if "WWE Wrestling" in linea or "Evento BOX" in linea:
+            return True
+        
+        # Un título general tiene un emoji
+        if REGEX_EMOJI.search(linea):
+            # Y NO parece un partido (no contiene 'vs', 'va' ni horarios explícitos)
+            if not any(keyword in linea.lower() for keyword in ["vs", "va", " a las ", " pm ", " am ", "p.m."]):
+                return True
+        return False
+
+    def parsear_linea_partido(linea_partido):
+        partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
+        linea_limpia = linea_partido.strip()
+        
+        descripcion_y_horarios = linea_limpia
+        if " por " in linea_limpia:
+            partes = linea_limpia.split(" por ", 1)
+            descripcion_y_horarios = partes[0]
+            canales_texto = partes[1].replace(" y ", ", ")
+            partido["canales"] = [c.strip() for c in canales_texto.split(',')]
+
+        frases_split = r'\s+a las\s+|\s+a partir de las\s+'
+        if re.search(frases_split, descripcion_y_horarios, re.IGNORECASE):
+            partes = re.split(frases_split, descripcion_y_horarios, 1, re.IGNORECASE)
+            partido["descripcion"], partido["horarios"] = partes[0].strip(), partes[1].strip()
+        else:
+            match_horario = re.search(r'\d', descripcion_y_horarios)
+            if match_horario:
+                pos_inicio = match_horario.start()
+                partido["descripcion"] = descripcion_y_horarios[:pos_inicio].strip()
+                partido["horarios"] = descripcion_y_horarios[pos_inicio:].strip()
+            else:
+                partido["descripcion"] = descripcion_y_horarios
+
+        if " vs " in partido["descripcion"]:
+            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
+        elif " va " in partido["descripcion"]:
+            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" va ")]
+            
+        return partido
+
+    datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
+    lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
+    
+    bloques_evento = []
+    bloque_actual = []
+    for linea in lineas:
+        if "Eventos Deportivos" in linea:
+            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
+            year_actual = datetime.now().year
+            titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
+            datos_json["titulo_guia"] = titulo_completo_html
+            continue
+        if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
+            continue
+        
+        if es_linea_de_titulo(linea) and bloque_actual:
+            bloques_evento.append(bloque_actual)
+            bloque_actual = [linea]
+        else:
+            bloque_actual.append(linea)
+    if bloque_actual: bloques_evento.append(bloque_actual)
+
+    lista_eventos_original = []
+    for bloque in bloques_evento:
+        if not bloque: continue
+        evento_principal = bloque[0]
+        evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
+        contenido = bloque[1:]
+        
+        detalles_previos = []
+        for linea in contenido:
+            if any(keyword in linea for keyword in ["Este", "Centro", "Pacífico", "partir de las"]):
+                partido_info = parsear_linea_partido(linea)
+                partido_info["detalle_partido"] = " ".join(detalles_previos).strip()
+                if not partido_info["descripcion"] and detalles_previos:
+                    partido_info["descripcion"] = detalles_previos[-1]
+                partido_info["organizador"] = evento_principal
+                evento_json["partidos"].append(partido_info)
+                detalles_previos = []
+            else:
+                detalles_previos.append(linea)
+        
+        if detalles_previos:
+            partido_info = parsear_linea_partido(detalles_previos[-1])
+            partido_info["detalle_partido"] = " ".join(detalles_previos[:-1]).strip()
+            partido_info["organizador"] = evento_principal
+            evento_json["partidos"].append(partido_info)
+        
+        if evento_json["partidos"]:
+            lista_eventos_original.append(evento_json)
+
+    eventos_relevantes_especiales = []
+    if ranking_relevancia:
+        print("Creando tarjetas especiales para eventos relevantes...")
+        descripciones_ya_anadidas = []
+        for desc_relevante in ranking_relevancia:
+            for evento in lista_eventos_original:
+                for partido in evento["partidos"]:
+                    if partido["descripcion"] and desc_relevante in partido["descripcion"] and partido["descripcion"] not in descripciones_ya_anadidas:
+                        tarjeta_especial = {
+                            "evento_principal": evento["evento_principal"],
+                            "partido_relevante": {
+                                "descripcion": partido["descripcion"],
+                                "detalle_partido": partido["detalle_partido"],
+                                "horarios": partido["horarios"],
+                                "canales": partido["canales"],
+                                "competidores": partido["competidores"],
+                                "organizador": evento["evento_principal"]
+                            }
+                        }
+                        eventos_relevantes_especiales.append(tarjeta_especial)
+                        descripciones_ya_anadidas.append(partido["descripcion"])
+                        break
+                else: continue
+                break
+    
+    datos_json["eventos"] = eventos_relevantes_especiales + lista_eventos_original
+    return json.dumps(datos_json, indent=4, ensure_ascii=False)
+
+# --- 6. FUNCIÓN PARA GENERAR EL SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
