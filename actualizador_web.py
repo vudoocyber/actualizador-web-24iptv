@@ -5,7 +5,6 @@ import os
 from ftplib import FTP
 from datetime import datetime
 import json
-# Se mantiene el import de google.generativeai, aunque la IA no se use directamente aquí
 import google.generativeai as genai
 
 # --- 1. CONFIGURACIÓN ---
@@ -18,7 +17,7 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
-NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # Archivo de Texto Puro para Telegram
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt'
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
@@ -43,7 +42,7 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (CORREGIDA) ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -88,38 +87,90 @@ Dale clic al enlace y entérate de todo en segundos 👇
 
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
-    # CORRECCIÓN: Usamos mensaje_texto_puro en lugar de mensaje_texto_plano
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
     
-    # Retornamos AMBAS versiones, HTML para web y Texto Puro para TXT de Telegram
     return mensaje_html_final, mensaje_texto_puro 
 
 
-# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM ---
+# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM (NUEVA) ---
 def generar_archivo_telegram_txt(mensaje_texto_puro):
     """
-    Genera un archivo de texto plano con codificación UTF-8 para evitar errores de Telegram.
+    Genera un archivo de texto plano con codificación UTF-8.
     """
     try:
-        # Escribimos el mensaje con codificación UTF-8 explícita
         with open(NOMBRE_ARCHIVO_TELEGRAM, 'w', encoding='utf-8') as f:
             f.write(mensaje_texto_puro)
         print(f"Archivo de texto plano '{NOMBRE_ARCHIVO_TELEGRAM}' generado para Telegram.")
     except Exception as e:
         print(f"Error al generar el archivo de texto plano para Telegram: {e}")
-        raise # Propagamos el error si no se puede generar el archivo
+        raise 
     return NOMBRE_ARCHIVO_TELEGRAM
 
+# --- 5A. FUNCIÓN AUXILIAR PARA PARSEAR EVENTOS ---
+def crear_json_evento(lineas):
+    # Lógica simplificada para recrear un solo objeto de evento
+    evento_principal = ""
+    partidos = []
+    
+    for linea in lineas:
+        # Simplificación: El primer hito con emojis es el evento principal
+        if re.search(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', linea, re.UNICODE):
+            evento_principal = linea.strip()
+        # El resto son partidos o detalles (simplificado)
+        elif "Este, " in linea and evento_principal:
+            partidos.append({"detalle": linea.strip()})
+        elif "a las" in linea and evento_principal:
+             partidos.append({"detalle": linea.strip()})
 
-# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS ---
+    if not evento_principal:
+        # Si no se encuentra un evento principal claro, usamos la primera línea como hito
+        evento_principal = lineas[0].strip() if lineas else "Evento Desconocido"
+
+    return {
+        "evento_principal": evento_principal,
+        "partidos": partidos
+    }
+
+
+# --- 5B. FUNCIÓN PARA CREAR JSON DE EVENTOS (CON ANIDACIÓN) ---
 def crear_json_eventos(texto_crudo):
     """
-    Crea el archivo events.json con el texto crudo para que scripts subsiguientes
-    (ranker/fetcher) lo lean y lo procesen.
+    Crea el archivo events.json con la estructura anidada.
     """
+    lineas = texto_crudo.strip().split('\n')
+    eventos_anidados = []
+    
+    # Marcadores para separar bloques de eventos
+    MARCADOR_INICIO = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
+    
+    bloque_actual = []
+    
+    # Lógica de separación de bloques basada en tus otros proyectos
+    for i, linea in enumerate(lineas):
+        linea_limpia = linea.strip()
+        # Si la línea es el encabezado de un evento principal
+        es_nuevo_evento = MARCADOR_INICIO.search(linea_limpia) and not linea_limpia.startswith("Eventos Deportivos")
+
+        if es_nuevo_evento and bloque_actual and i > 0:
+            # Procesar el bloque anterior
+            evento = crear_json_evento(bloque_actual)
+            if evento['partidos']:
+                eventos_anidados.append(evento)
+            # Iniciar nuevo bloque
+            bloque_actual = [linea_limpia]
+        elif linea_limpia:
+            # Añadir línea al bloque actual
+            bloque_actual.append(linea_limpia)
+
+    # Procesar el último bloque
+    if bloque_actual:
+        evento = crear_json_evento(bloque_actual)
+        if evento['partidos']:
+            eventos_anidados.append(evento)
+
     data = {
         "fecha_extraccion": datetime.now().isoformat(),
-        "contenido_texto_crudo": texto_crudo,
+        "eventos": eventos_anidados
     }
     
     try:
@@ -143,7 +194,7 @@ def crear_sitemap():
     <priority>1.0</priority>
   </url>
 </urlset>"""
-    with open(NOMBRE_ARCHIVO_SITEMAP, 'w', encoding='utf-8') as f:
+    with open('sitemap.xml', 'w', encoding='utf-8') as f:
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
@@ -171,10 +222,9 @@ def main():
     # No se usa ranking de IA en este script
     
     print("2. Generando contenido para todos los archivos...")
-    # MODIFICADO: Ahora obtenemos HTML (para web) y Texto Puro (para TXT de Telegram)
     contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
     
-    # Generar el JSON (events.json)
+    # Generar el JSON (events.json) con la estructura anidada
     contenido_json = crear_json_eventos(texto_extraido_filtrado) 
     
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
@@ -194,7 +244,7 @@ def main():
         with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_html_mensaje)
         archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
 
-        archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
+        archivos_a_subir.append('sitemap.xml') 
         archivos_a_subir.append(nombre_archivo_telegram_txt) 
         
         print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
@@ -211,7 +261,7 @@ def main():
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP, nombre_archivo_telegram_txt]:
+            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, 'sitemap.xml', nombre_archivo_telegram_txt]:
                 with open(nombre_archivo, 'rb') as file:
                     print(f"Subiendo '{nombre_archivo}'...")
                     ftp.storbinary(f'STOR {nombre_archivo}', file)
