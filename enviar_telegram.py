@@ -3,8 +3,6 @@ import os
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
-# Eliminamos from locale import setlocale, LC_TIME ya que no es compatible
-# y causa el error.
 
 # --- Mapeo de meses para evitar errores de localidad ---
 MESES_ESPANOL = {
@@ -14,18 +12,15 @@ MESES_ESPANOL = {
 }
 
 # --- Configuración de zona horaria y secretos ---
-# Asumimos que el flujo de trabajo pasa la variable TZ.
 MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
 
 URL_MENSAJE = os.environ.get("URL_MENSAJE_MENSAJERIA") 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-# Bloque de setlocale eliminado para evitar el error
-
 def obtener_mensaje_web(url):
     """
-    Descarga el contenido de la URL del mensaje y valida que la fecha sea la actual.
+    Descarga el contenido de la URL del mensaje, extrae el texto puro y valida que la fecha sea la actual.
     """
     if not url:
         print("Error: La URL del mensaje no está configurada en los Secrets.")
@@ -35,46 +30,55 @@ def obtener_mensaje_web(url):
         respuesta = requests.get(url)
         respuesta.raise_for_status()
         
-        mensaje_puro = respuesta.text.strip()
-        mensaje_puro = mensaje_puro.replace('<pre>', '').replace('</pre>', '').strip()
+        # 1. Extraer el texto puro dentro de <pre>
+        html_content = respuesta.text
+        match_pre = re.search(r'<pre>(.*?)</pre>', html_content, re.DOTALL)
         
-        # --- Lógica de Validación de Fecha Robusta y Corregida ---
+        if not match_pre:
+            print("Error fatal: No se encontró el texto del mensaje dentro de las etiquetas <pre>.")
+            return None
+            
+        mensaje_puro = match_pre.group(1).strip()
         
-        # 1. Buscamos el patrón de fecha: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
-        # El patrón incluye el mes para luego poder mapearlo.
-        match = re.search(r'\d{1,2}\s+de\s+([a-zA-Z]+)\s+de\s+\d{4}', mensaje_puro, re.IGNORECASE)
+        # --- Lógica de Validación de Fecha Robusta ---
         
-        if not match:
+        # 2. Buscamos el patrón de fecha para extraer los componentes exactos.
+        # Patrón: *Sabado 18 de Octubre de 2025*
+        # Extraemos Día (18), Mes (Octubre), Año (2025)
+        match_fecha = re.search(
+            r'(\d{1,2})\s+de\s+([a-zA-Z]+)\s+de\s+(\d{4})', 
+            mensaje_puro, 
+            re.IGNORECASE
+        )
+        
+        if not match_fecha:
             print("Validación de fecha fallida: No se encontró el patrón de fecha (DD de Mes de AAAA) en el mensaje.")
             return None
 
-        # Cadena de fecha extraída (ej: '18 de Octubre de 2025')
-        fecha_str_completa = match.group(0).strip()
-        nombre_mes = match.group(1).lower()
+        # Componentes de la fecha
+        dia = match_fecha.group(1).zfill(2) # '18' -> '18'
+        nombre_mes = match_fecha.group(2).lower() # 'Octubre' -> 'octubre'
+        anio = match_fecha.group(3) # '2025'
         
-        # 2. Reemplazamos el nombre del mes por su número (Mapeo)
+        # 3. Mapeamos el nombre del mes a número (protegido contra errores de idioma)
         numero_mes = MESES_ESPANOL.get(nombre_mes)
         if not numero_mes:
-            print(f"Validación de fecha fallida: Nombre de mes no reconocido o mal escrito: {nombre_mes}")
+            print(f"Validación de fecha fallida: Nombre de mes no reconocido: {nombre_mes}")
             return None
             
-        # Creamos una nueva cadena de fecha en formato que no requiere localidad: DD/MM/AAAA
-        fecha_str_formato_universal = re.sub(r'de\s+'+re.escape(match.group(1)), f'{numero_mes}', fecha_str_completa, flags=re.IGNORECASE).replace(" de ", "/")
+        # 4. Construimos la cadena en formato universal DD/MM/AAAA
+        fecha_str_universal = f"{dia}/{numero_mes}/{anio}" 
 
-        # Limpieza final para obtener DD/MM/AAAA
-        # Ejemplo: "18 / 10 / 2025" -> "18/10/2025"
-        fecha_str_formato_universal = re.sub(r'\s+/\s*', '/', fecha_str_formato_universal).replace(" / ", "/")
-
-        # 3. Parseamos la cadena de fecha (sin depender de la localidad)
+        # 5. Parseamos y comparamos
         try:
             # Formato de parseo: "%d/%m/%Y" (ej: "18/10/2025")
-            fecha_mensaje = datetime.strptime(fecha_str_formato_universal, '%d/%m/%Y').date()
+            fecha_mensaje = datetime.strptime(fecha_str_universal, '%d/%m/%Y').date()
             
         except ValueError as e:
-            print(f"Validación de fecha fallida: Error al parsear el formato universal '{fecha_str_formato_universal}'. Error: {e}")
+            print(f"Validación de fecha fallida: Error al parsear el formato universal '{fecha_str_universal}'. Error: {e}")
             return None
 
-        # 4. Comparamos con la fecha actual de Ciudad de México
+        # 6. Comparamos con la fecha actual de Ciudad de México
         hoy_mx = datetime.now(MEXICO_TZ).date()
         
         if fecha_mensaje == hoy_mx:
@@ -91,10 +95,10 @@ def obtener_mensaje_web(url):
         print(f"Error durante el proceso de validación: {e}")
         return None
 
-# ... (El resto del script se mantiene igual)
-
 def enviar_mensaje_telegram(token, chat_id, mensaje):
-    # ... (código de enviar_mensaje_telegram)
+    """
+    Envía el mensaje de texto a Telegram.
+    """
     if not token or not chat_id:
         print("Error: El token del bot o el ID del chat no están configurados.")
         return False
