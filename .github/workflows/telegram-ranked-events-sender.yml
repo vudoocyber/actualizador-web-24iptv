@@ -1,0 +1,34 @@
+name: Envio Automatico Eventos Rankeados
+
+on:
+  schedule:
+    # Se ejecuta sábados y domingos a las 8:30 AM hora de la Ciudad de México (14:30 UTC)
+    - cron: '30 14 * * 6,0'
+  workflow_dispatch:
+
+jobs:
+  enviar_ranking:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Instalar dependencias
+      # Instala requests para peticiones y python-dateutil para manejo de zona horaria
+      run: pip install requests python-dateutil
+
+    - name: Ejecutar script de envio de ranking
+      # Inyectamos todos los Secrets y definimos la zona horaria
+      run: python enviar_eventos_rankeados_telegram.py
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        URL_EVENTOS_JSON: ${{ secrets.URL_EVENTOS_JSON }}
+        URL_RANKING_JSON: ${{ secrets.URL_RANKING_JSON }}
+        TZ: America/Mexico_City # Zona horaria para validación del script
