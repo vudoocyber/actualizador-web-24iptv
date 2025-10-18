@@ -5,7 +5,8 @@ import os
 from ftplib import FTP
 from datetime import datetime
 import json
-# Las librerías de Gemini se mantienen fuera de este script
+# Se mantiene el import de google.generativeai, aunque no se use en este script
+import google.generativeai as genai
 
 # --- 1. CONFIGURACIÓN ---
 URL_FUENTE = os.getenv('URL_FUENTE')
@@ -17,7 +18,8 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
-NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # Archivo de Texto Puro para Telegram
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # NUEVA CONSTANTE: Archivo de Texto Puro para Telegram
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
 def aplicar_reglas_html(texto_crudo):
@@ -41,7 +43,7 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (MODIFICADA) ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -67,6 +69,7 @@ def crear_mensaje_whatsapp(texto_crudo):
     fecha_formateada = f"{fecha_del_dia} de {year_actual}" if fecha_del_dia else f"Hoy, {datetime.now().strftime('%d de %B')}"
     lista_de_titulos = "\n".join(titulos_con_emoji)
     
+    # Este es el texto puro que necesitamos para Telegram
     mensaje_texto_puro = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
 
 Consulta los horarios y canales de transmisión aquí:
@@ -86,10 +89,12 @@ Dale clic al enlace y entérate de todo en segundos 👇
 
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
-    # Versión HTML para subir al web
-    mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
+    # Este es el HTML que se sube al servidor (mensaje_whatsapp.html)
+    mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
     
-    return mensaje_html_final, mensaje_texto_puro # Retornamos ambas versiones
+    # DEVOLVEMOS AMBOS: HTML para la web y Texto Puro para Telegram
+    return mensaje_html_final, mensaje_texto_plano
+
 
 # --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM (NUEVA) ---
 def generar_archivo_telegram_txt(mensaje_texto_puro):
@@ -107,15 +112,26 @@ def generar_archivo_telegram_txt(mensaje_texto_puro):
     return NOMBRE_ARCHIVO_TELEGRAM
 
 
-# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS (CORREGIDA) ---
-def crear_json_eventos(texto_crudo):
-    """
-    Crea el archivo events.json con el texto crudo para que scripts subsiguientes
-    (ranker/fetcher) lo lean y lo procesen.
-    """
+# --- 5. FUNCIÓN PARA COMUNICARSE CON GEMINI (ELIMINADA LA LÓGICA DE RANKING DE AQUÍ) ---
+def obtener_ranking_eventos(texto_crudo):
+    # NOTA: Esta función no debe usarse para el ranking; su lógica se ha movido a scripts externos.
+    # El código se mantiene solo para satisfacer la llamada en 'main'.
+    if 'GEMINI_API_KEY' in globals() and globals()['GEMINI_API_KEY']:
+        # Si la API Key existe, intentamos simular el ranking
+        # Pero en este proyecto, se asume que scripts externos hacen esto.
+        print("ADVERTENCIA: La lógica de ranking ha sido delegada a scripts externos.")
+        return []
+    else:
+        print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
+        return []
+
+# --- 6. FUNCIÓN PARA CREAR JSON DE EVENTOS ---
+def crear_json_eventos(texto_crudo, ranking):
+    # Adaptación de la función original para que devuelva el contenido JSON
     data = {
         "fecha_extraccion": datetime.now().isoformat(),
         "contenido_texto_crudo": texto_crudo,
+        # Si el ranking se usa, se incluiría aquí. Por ahora, queda fuera de este script.
     }
     
     try:
@@ -128,7 +144,7 @@ def crear_json_eventos(texto_crudo):
     return contenido_json
 
 
-# --- 6. FUNCIÓN PARA CREAR SITEMAP ---
+# --- 7. FUNCIÓN PARA CREAR SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -145,7 +161,7 @@ def crear_sitemap():
     print("Archivo sitemap.xml generado con la fecha de hoy.")
 
 
-# --- 7. FUNCIÓN PRINCIPAL ---
+# --- 8. FUNCIÓN PRINCIPAL (AJUSTADA) ---
 def main():
     print("Iniciando proceso de actualización de todos los archivos...")
     if not URL_FUENTE:
@@ -165,13 +181,13 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    # No se usa ranking de IA en este script
+    ranking = [] # Se usa ranking vacío para satisfacer la llamada a crear_json_eventos
     
     print("2. Generando contenido para todos los archivos...")
+    # MODIFICADO: Ahora obtenemos HTML y el Texto Puro para Telegram
     contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
     
-    # Generar el JSON (events.json)
-    contenido_json = crear_json_eventos(texto_extraido_filtrado) 
+    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking) 
     
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
     nombre_archivo_telegram_txt = generar_archivo_telegram_txt(contenido_texto_puro_telegram)
@@ -207,7 +223,7 @@ def main():
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in archivos_a_subir:
+            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP, nombre_archivo_telegram_txt]:
                 with open(nombre_archivo, 'rb') as file:
                     print(f"Subiendo '{nombre_archivo}'...")
                     ftp.storbinary(f'STOR {nombre_archivo}', file)
