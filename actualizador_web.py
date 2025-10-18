@@ -5,7 +5,7 @@ import os
 from ftplib import FTP
 from datetime import datetime
 import json
-# import google.generativeai as genai # ELIMINADA: Ya no se usa aquí
+# Las librerías de Gemini se mantienen fuera de este script
 
 # --- 1. CONFIGURACIÓN ---
 URL_FUENTE = os.getenv('URL_FUENTE')
@@ -18,7 +18,6 @@ NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programa
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
 NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # Archivo de Texto Puro para Telegram
-# GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # ELIMINADA: Ya no se usa aquí
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
 def aplicar_reglas_html(texto_crudo):
@@ -107,13 +106,26 @@ def generar_archivo_telegram_txt(mensaje_texto_puro):
         raise # Propagamos el error si no se puede generar el archivo
     return NOMBRE_ARCHIVO_TELEGRAM
 
+# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS (REINTRODUCIDA) ---
+def crear_json_eventos(texto_crudo):
+    """
+    Crea un archivo JSON simple a partir del texto crudo para uso por otros scripts (ranker/fetcher).
+    """
+    # Usamos una estructura simple para encapsular todo el texto crudo
+    # Esto asegura que los scripts subsiguientes tengan el texto para analizar.
+    data = {
+        "fecha_generacion": datetime.now().isoformat(),
+        "contenido_texto_crudo": texto_crudo,
+        # Agrega más campos si los scripts ranker o fetcher los esperan
+    }
+    
+    try:
+        contenido_json = json.dumps(data, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error al serializar el JSON: {e}")
+        return "{}"
 
-# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS ---
-# NOTA: Esta función es un placeholder. Su lógica real está ahora en results_fetcher.py
-def crear_json_eventos(texto_crudo, ranking):
-    # Placeholder: En una implementación real, esta función usaría el ranking para filtrar eventos
-    # y generar el JSON final.
-    return "{}"
+    return contenido_json
 
 
 # --- 6. FUNCIÓN PARA CREAR SITEMAP ---
@@ -153,14 +165,14 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    # Se usa un ranking vacío ya que la lógica de IA se movió a otro script
-    ranking = []
-
+    # No usamos ranking aquí, el JSON contiene el texto para que el ranker lo analice.
+    ranking = [] # Mantener esta variable vacía para compatibilidad si otros scripts la usan
+    
     print("2. Generando contenido para todos los archivos...")
     contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
     
-    # Usamos ranking vacío ya que el JSON completo debería ser generado por results_fetcher
-    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking) 
+    # Generar el JSON para los scripts subsiguientes
+    contenido_json = crear_json_eventos(texto_extraido_filtrado) 
     
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
     nombre_archivo_telegram_txt = generar_archivo_telegram_txt(contenido_texto_puro_telegram)
@@ -180,7 +192,7 @@ def main():
         archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
 
         archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
-        archivos_a_subir.append(nombre_archivo_telegram_txt) # Archivo TXT para Telegram
+        archivos_a_subir.append(nombre_archivo_telegram_txt) 
         
         print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
     except Exception as e:
