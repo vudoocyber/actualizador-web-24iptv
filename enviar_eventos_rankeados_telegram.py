@@ -3,6 +3,14 @@ import os
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import re
+
+# --- Mapeo de meses para evitar errores de localidad ---
+MESES_ESPANOL = {
+    'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+    'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+    'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+}
 
 # --- CONFIGURACIÓN Y SECRETS ---
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -52,15 +60,15 @@ def validar_fecha_actualizacion(url_json):
 
 def obtener_eventos_rankeados(url_ranking):
     """
-    Descarga el JSON de ranking y devuelve la lista de eventos.
+    Descarga el JSON de ranking y devuelve la lista de eventos, usando la clave correcta.
     """
     try:
         respuesta = requests.get(url_ranking, headers=HEADERS, timeout=10)
         respuesta.raise_for_status()
         datos = respuesta.json()
         
-        # Asumimos que la estructura es {"eventos_relevantes_especiales": [...]}
-        eventos = datos.get("eventos_relevantes_especiales", [])
+        # CORRECCIÓN: Buscamos la clave 'eventos_relevantes'
+        eventos = datos.get("eventos_relevantes", []) 
         
         print(f"Obtenidos {len(eventos)} eventos rankeados.")
         return eventos
@@ -81,34 +89,43 @@ def formatear_mensaje_telegram(evento):
     def escape_markdown(text):
         return re.sub(r'([_*[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
+    # El evento rankeado es un objeto complejo (tiene "partidos")
+    if evento.get('partidos'):
+        partido_principal = evento['partidos'][0]
+    else:
+        # Fallback si la estructura es plana
+        partido_principal = evento 
+
     # Extracción segura de datos
-    desc = evento.get('descripcion', 'Evento no especificado')
-    horarios = evento.get('horarios', 'Sin hora')
-    canales = ", ".join(evento.get('canales', ['Canal Desconocido']))
-    competidores = " vs ".join(evento.get('competidores', ['Competidores']))
-    organizador = evento.get('organizador', 'Evento Deportivo')
+    desc = partido_principal.get('descripcion', 'Evento no especificado')
+    horarios = partido_principal.get('horarios', 'Sin hora')
+    canales = ", ".join(partido_principal.get('canales', ['Canal Desconocido']))
+    competidores = " vs ".join(partido_principal.get('competidores', ['Competidores']))
+    organizador = evento.get('evento_principal', 'Evento Deportivo')
+    detalle_partido = partido_principal.get('detalle_partido', 'Ubicación Desconocida')
     
     # Asignamos un emoji basado en el contenido del organizador
     emoji = "⭐"
     if "BOX" in organizador or "UFC" in organizador:
         emoji = "🥊"
-    elif "MX" in organizador or "Liga" in organizador:
+    elif "MX" in organizador or "Liga" in organizador or "⚽" in organizador:
         emoji = "⚽"
-    elif "NFL" in organizador:
+    elif "NFL" in organizador or "🏈" in organizador:
         emoji = "🏈"
-    elif "NBA" in organizador or "WNBA" in organizador:
+    elif "NBA" in organizador or "WNBA" in organizador or "🏀" in organizador:
         emoji = "🏀"
-    elif "MLB" in organizador:
+    elif "MLB" in organizador or "⚾" in organizador:
         emoji = "⚾"
         
-    # Construcción del mensaje en MarkdownV2
+    # Construcción del mensaje en Markdown (usamos un formato simple para máxima compatibilidad)
     mensaje = (
         f"{emoji} *¡EVENTO IMPERDIBLE DEL DÍA!* {emoji}\n\n"
         f"*{escape_markdown(organizador)}*\n"
-        f"ðŸ† Competencia: *{escape_markdown(competidores)}*\n"
+        f"ðŸ† Encuentro: *{escape_markdown(competidores)}*\n"
+        f"ðŸš Sede: {escape_markdown(detalle_partido)}\n"
         f"â° Horario: *{escape_markdown(horarios)}*\n"
         f"ðŸ“º Canales: _{escape_markdown(canales)}_\n\n"
-        f"âš¡ï¸ *Â¡No te lo pierdas!* Mira la acciÃ³n aquÃ­:\n"
+        f"âš¡ï¸ ¡No te lo pierdas! Mira la acción completa aquí:\n"
         f"https://24hometv.xyz/"
     )
     return mensaje
