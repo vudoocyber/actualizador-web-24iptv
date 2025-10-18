@@ -12,40 +12,32 @@ MESES_ESPANOL = {
 }
 
 # --- Configuración de zona horaria y secretos ---
-# Usamos America/Mexico_City como zona horaria de referencia
 MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
 
-URL_MENSAJE = os.environ.get("URL_MENSAJE_MENSAJERIA") 
+# Nuevo secreto: URL que apunta al archivo de texto plano subido por el otro script
+URL_MENSAJE = os.environ.get("URL_MENSAJE_TELEGRAM_TXT") 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def obtener_mensaje_web(url):
     """
-    Descarga el contenido de la URL del mensaje, extrae el texto puro y valida que la fecha sea la actual.
+    Descarga el contenido del archivo de texto plano y valida que la fecha sea la actual.
     """
     if not url:
-        print("Error: La URL del mensaje no está configurada en los Secrets.")
+        print("Error: La URL del mensaje TXT no está configurada en los Secrets.")
         return None
         
     try:
-        # Petición GET para descargar el contenido del mensaje
+        # Petición GET para descargar el contenido del mensaje (es texto plano)
         respuesta = requests.get(url)
         respuesta.raise_for_status()
         
-        # 1. Extraer el texto puro dentro de <pre> (asumiendo que el script principal lo envuelve)
-        html_content = respuesta.text
-        match_pre = re.search(r'<pre>(.*?)</pre>', html_content, re.DOTALL)
+        # Leemos el texto puro. No hay necesidad de limpiar etiquetas <pre>
+        mensaje_puro = respuesta.text.strip()
         
-        if not match_pre:
-            print("Error fatal: No se encontró el texto del mensaje dentro de las etiquetas <pre>.")
-            return None
-            
-        mensaje_puro = match_pre.group(1).strip()
+        # --- Lógica de Validación de Fecha ---
         
-        # --- Lógica de Validación de Fecha Robusta ---
-        
-        # 2. Buscamos el patrón de fecha para extraer los componentes exactos.
-        # Patrón: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
+        # 1. Buscamos el patrón de fecha: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
         match_fecha = re.search(
             r'(\d{1,2})\s+de\s+([a-zA-Z]+)\s+de\s+(\d{4})', 
             mensaje_puro, 
@@ -57,29 +49,27 @@ def obtener_mensaje_web(url):
             return None
 
         # Componentes de la fecha
-        dia = match_fecha.group(1).zfill(2) # '18' -> '18'
-        nombre_mes = match_fecha.group(2).lower() # 'Octubre' -> 'octubre'
-        anio = match_fecha.group(3) # '2025'
+        dia = match_fecha.group(1).zfill(2)
+        nombre_mes = match_fecha.group(2).lower()
+        anio = match_fecha.group(3)
         
-        # 3. Mapeamos el nombre del mes a número (protegido contra errores de idioma)
+        # 2. Mapeamos el nombre del mes a número (protegido contra errores de idioma)
         numero_mes = MESES_ESPANOL.get(nombre_mes)
         if not numero_mes:
             print(f"Validación de fecha fallida: Nombre de mes no reconocido: {nombre_mes}")
             return None
             
-        # 4. Construimos la cadena en formato universal DD/MM/AAAA
+        # 3. Construimos la cadena en formato universal DD/MM/AAAA
         fecha_str_universal = f"{dia}/{numero_mes}/{anio}" 
 
-        # 5. Parseamos y comparamos
+        # 4. Parseamos y comparamos
         try:
-            # Formato de parseo: "%d/%m/%Y" (ej: "18/10/2025")
             fecha_mensaje = datetime.strptime(fecha_str_universal, '%d/%m/%Y').date()
-            
         except ValueError as e:
             print(f"Validación de fecha fallida: Error al parsear el formato universal '{fecha_str_universal}'. Error: {e}")
             return None
 
-        # 6. Comparamos con la fecha actual de Ciudad de México
+        # 5. Comparamos con la fecha actual de Ciudad de México
         hoy_mx = datetime.now(MEXICO_TZ).date()
         
         if fecha_mensaje == hoy_mx:
@@ -113,8 +103,8 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     }
     
     try:
-        # CAMBIO CLAVE: Usamos 'json=payload' para forzar Content-Type: application/json; charset=utf-8,
-        # lo que resuelve el problema de los caracteres raros (mojibake).
+        # Usamos 'json=payload' para forzar Content-Type: application/json; charset=utf-8,
+        # lo cual resuelve el problema de codificación.
         respuesta = requests.post(url_api, json=payload) 
         respuesta.raise_for_status()
         print(f"Mensaje enviado a Telegram con éxito. Respuesta: {respuesta.json()}")
