@@ -5,7 +5,7 @@ import os
 from ftplib import FTP
 from datetime import datetime
 import json
-import google.generativeai as genai
+# import google.generativeai as genai # ELIMINADA: Ya no se usa aquí
 
 # --- 1. CONFIGURACIÓN ---
 URL_FUENTE = os.getenv('URL_FUENTE')
@@ -17,7 +17,8 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # Archivo de Texto Puro para Telegram
+# GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') # ELIMINADA: Ya no se usa aquí
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
 def aplicar_reglas_html(texto_crudo):
@@ -67,7 +68,7 @@ def crear_mensaje_whatsapp(texto_crudo):
     fecha_formateada = f"{fecha_del_dia} de {year_actual}" if fecha_del_dia else f"Hoy, {datetime.now().strftime('%d de %B')}"
     lista_de_titulos = "\n".join(titulos_con_emoji)
     
-    mensaje_texto_plano = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
+    mensaje_texto_puro = f"""🎯 ¡Guía de Eventos Deportivos y Especiales para día de Hoy! 🏆🔥
 
 Consulta los horarios y canales de transmisión aquí:
 
@@ -86,191 +87,36 @@ Dale clic al enlace y entérate de todo en segundos 👇
 
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
-    mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_plano}</pre>\n</body>\n</html>"""
-    return mensaje_html_final
+    # Versión HTML para subir al web
+    mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
+    
+    return mensaje_html_final, mensaje_texto_puro # Retornamos ambas versiones
 
-# --- 4. FUNCIÓN PARA COMUNICARSE CON GEMINI ---
-def obtener_ranking_eventos(texto_crudo):
-    if not GEMINI_API_KEY:
-        print("ADVERTENCIA: No se encontró la API Key de Gemini. Omitiendo el ranking de eventos.")
-        return []
-
-    print("Contactando a la IA de Gemini con prompt optimizado para audiencia México/USA...")
+# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM ---
+def generar_archivo_telegram_txt(mensaje_texto_puro):
+    """
+    Genera un archivo de texto plano con codificación UTF-8 para evitar errores de Telegram.
+    """
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        lineas = texto_crudo.strip().split('\n')
-        PALABRAS_CLAVE_HORARIOS = ["Este", "Centro", "Pacífico", "partir de las", " por "]
-        eventos_para_analizar = []
-        for linea in lineas:
-            linea_limpia = linea.strip()
-            if any(keyword in linea_limpia for keyword in PALABRAS_CLAVE_HORARIOS):
-                try:
-                    descripcion = re.split(r'\s+a las\s+|\s+a partir de las\s+', linea_limpia, 1, re.IGNORECASE)[0]
-                    descripcion = descripcion.split(" por ")[0]
-                    eventos_para_analizar.append(descripcion.strip())
-                except:
-                    continue
-            elif "Pelea Estelar" in linea_limpia:
-                 eventos_para_analizar.append(linea_limpia)
-
-        lista_texto_plano = "\n".join(set(eventos_para_analizar))
-
-        prompt = f"""
-        Actúa como un analista experto en tendencias de entretenimiento para una audiencia de México y Estados Unidos (USA).
-        Tu tarea es analizar la siguiente lista de eventos y determinar los 3 más relevantes para esta audiencia específica.
-        Para determinar la relevancia, prioriza de la siguiente manera:
-        1.  **Alto Interés Regional:** Da máxima prioridad a eventos de la Liga MX, NFL, MLB, NBA y peleas de boxeo importantes.
-        2.  **Relevancia Cultural General:** Considera conciertos, estrenos de TV o eventos de cultura pop muy esperados.
-        3.  **Popularidad en Búsquedas y Redes Sociales:** Evalúa qué eventos están generando más conversación.
-        La salida debe ser exclusivamente el texto de la descripción de los 3 eventos, cada uno en una línea nueva, en orden del más al menos relevante.
-        Asegúrate de que la descripción que devuelves coincida EXACTAMENTE con una de las líneas que te proporcioné.
-        NO incluyas números, viñetas, comillas, explicaciones, o cualquier texto introductorio.
-
-        LISTA DE EVENTOS PARA ANALIZAR:
-        {lista_texto_plano}
-        """
-
-        response = model.generate_content(prompt, request_options={'timeout': 120})
-        ranking_limpio = [re.sub(r'^[*-]?\s*', '', linea).strip() for linea in response.text.strip().split('\n') if linea.strip()]
-        
-        print(f"Ranking de Gemini (optimizado) recibido: {ranking_limpio}")
-        return ranking_limpio
-
+        # Escribimos el mensaje con codificación UTF-8 explícita
+        with open(NOMBRE_ARCHIVO_TELEGRAM, 'w', encoding='utf-8') as f:
+            f.write(mensaje_texto_puro)
+        print(f"Archivo de texto plano '{NOMBRE_ARCHIVO_TELEGRAM}' generado para Telegram.")
     except Exception as e:
-        print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
-        return []
+        print(f"Error al generar el archivo de texto plano para Telegram: {e}")
+        raise # Propagamos el error si no se puede generar el archivo
+    return NOMBRE_ARCHIVO_TELEGRAM
 
-# --- 5. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES CORREGIDA) ---
-def crear_json_eventos(texto_crudo, ranking_relevancia):
-    
-    REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
 
-    # --- NUEVA FUNCIÓN INTERNA PARA IDENTIFICAR TÍTULOS ---
-    def es_linea_de_titulo(linea):
-        # Casos explícitos que siempre son títulos de un nuevo evento
-        if "WWE Wrestling" in linea or "Evento BOX" in linea:
-            return True
-        
-        # Un título general tiene un emoji
-        if REGEX_EMOJI.search(linea):
-            # Y NO parece un partido (no contiene 'vs', 'va' ni horarios explícitos)
-            if not any(keyword in linea.lower() for keyword in ["vs", "va", " a las ", " pm ", " am ", "p.m."]):
-                return True
-        return False
+# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS ---
+# NOTA: Esta función es un placeholder. Su lógica real está ahora en results_fetcher.py
+def crear_json_eventos(texto_crudo, ranking):
+    # Placeholder: En una implementación real, esta función usaría el ranking para filtrar eventos
+    # y generar el JSON final.
+    return "{}"
 
-    def parsear_linea_partido(linea_partido):
-        partido = {"descripcion": "", "horarios": "", "canales": [], "competidores": []}
-        linea_limpia = linea_partido.strip()
-        
-        descripcion_y_horarios = linea_limpia
-        if " por " in linea_limpia:
-            partes = linea_limpia.split(" por ", 1)
-            descripcion_y_horarios = partes[0]
-            canales_texto = partes[1].replace(" y ", ", ")
-            partido["canales"] = [c.strip() for c in canales_texto.split(',')]
 
-        frases_split = r'\s+a las\s+|\s+a partir de las\s+'
-        if re.search(frases_split, descripcion_y_horarios, re.IGNORECASE):
-            partes = re.split(frases_split, descripcion_y_horarios, 1, re.IGNORECASE)
-            partido["descripcion"], partido["horarios"] = partes[0].strip(), partes[1].strip()
-        else:
-            match_horario = re.search(r'\d', descripcion_y_horarios)
-            if match_horario:
-                pos_inicio = match_horario.start()
-                partido["descripcion"] = descripcion_y_horarios[:pos_inicio].strip()
-                partido["horarios"] = descripcion_y_horarios[pos_inicio:].strip()
-            else:
-                partido["descripcion"] = descripcion_y_horarios
-
-        if " vs " in partido["descripcion"]:
-            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" vs ")]
-        elif " va " in partido["descripcion"]:
-            partido["competidores"] = [c.strip() for c in partido["descripcion"].split(" va ")]
-            
-        return partido
-
-    datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
-    lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
-    
-    bloques_evento = []
-    bloque_actual = []
-    for linea in lineas:
-        if "Eventos Deportivos" in linea:
-            fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
-            year_actual = datetime.now().year
-            titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
-            datos_json["titulo_guia"] = titulo_completo_html
-            continue
-        if "Kaelus Soporte" in linea or "⚽️🏈🏀⚾️🏐🎾🥊🏒⛳️🎳" in linea:
-            continue
-        
-        if es_linea_de_titulo(linea) and bloque_actual:
-            bloques_evento.append(bloque_actual)
-            bloque_actual = [linea]
-        else:
-            bloque_actual.append(linea)
-    if bloque_actual: bloques_evento.append(bloque_actual)
-
-    lista_eventos_original = []
-    for bloque in bloques_evento:
-        if not bloque: continue
-        evento_principal = bloque[0]
-        evento_json = {"evento_principal": evento_principal, "detalle_evento": "", "partidos": []}
-        contenido = bloque[1:]
-        
-        detalles_previos = []
-        for linea in contenido:
-            if any(keyword in linea for keyword in ["Este", "Centro", "Pacífico", "partir de las"]):
-                partido_info = parsear_linea_partido(linea)
-                partido_info["detalle_partido"] = " ".join(detalles_previos).strip()
-                if not partido_info["descripcion"] and detalles_previos:
-                    partido_info["descripcion"] = detalles_previos[-1]
-                partido_info["organizador"] = evento_principal
-                evento_json["partidos"].append(partido_info)
-                detalles_previos = []
-            else:
-                detalles_previos.append(linea)
-        
-        if detalles_previos:
-            partido_info = parsear_linea_partido(detalles_previos[-1])
-            partido_info["detalle_partido"] = " ".join(detalles_previos[:-1]).strip()
-            partido_info["organizador"] = evento_principal
-            evento_json["partidos"].append(partido_info)
-        
-        if evento_json["partidos"]:
-            lista_eventos_original.append(evento_json)
-
-    eventos_relevantes_especiales = []
-    if ranking_relevancia:
-        print("Creando tarjetas especiales para eventos relevantes...")
-        descripciones_ya_anadidas = []
-        for desc_relevante in ranking_relevancia:
-            for evento in lista_eventos_original:
-                for partido in evento["partidos"]:
-                    if partido["descripcion"] and desc_relevante in partido["descripcion"] and partido["descripcion"] not in descripciones_ya_anadidas:
-                        tarjeta_especial = {
-                            "evento_principal": evento["evento_principal"],
-                            "partido_relevante": {
-                                "descripcion": partido["descripcion"],
-                                "detalle_partido": partido["detalle_partido"],
-                                "horarios": partido["horarios"],
-                                "canales": partido["canales"],
-                                "competidores": partido["competidores"],
-                                "organizador": evento["evento_principal"]
-                            }
-                        }
-                        eventos_relevantes_especiales.append(tarjeta_especial)
-                        descripciones_ya_anadidas.append(partido["descripcion"])
-                        break
-                else: continue
-                break
-    
-    datos_json["eventos"] = eventos_relevantes_especiales + lista_eventos_original
-    return json.dumps(datos_json, indent=4, ensure_ascii=False)
-
-# --- 6. FUNCIÓN PARA GENERAR EL SITEMAP ---
+# --- 6. FUNCIÓN PARA CREAR SITEMAP ---
 def crear_sitemap():
     fecha_actual = datetime.now().strftime('%Y-%m-%d')
     contenido_sitemap = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -285,6 +131,7 @@ def crear_sitemap():
     with open(NOMBRE_ARCHIVO_SITEMAP, 'w', encoding='utf-8') as f:
         f.write(contenido_sitemap)
     print("Archivo sitemap.xml generado con la fecha de hoy.")
+
 
 # --- 7. FUNCIÓN PRINCIPAL ---
 def main():
@@ -306,21 +153,36 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    ranking = obtener_ranking_eventos(texto_extraido_filtrado)
+    # Se usa un ranking vacío ya que la lógica de IA se movió a otro script
+    ranking = []
 
-    print("2. Generando contenido para los 4 archivos...")
-    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking)
+    print("2. Generando contenido para todos los archivos...")
+    contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
+    
+    # Usamos ranking vacío ya que el JSON completo debería ser generado por results_fetcher
+    contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking) 
+    
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
-    contenido_mensaje_whatsapp = crear_mensaje_whatsapp(texto_extraido_filtrado)
+    nombre_archivo_telegram_txt = generar_archivo_telegram_txt(contenido_texto_puro_telegram)
     crear_sitemap()
     print("Contenido generado.")
 
     print("3. Guardando archivos locales...")
+    archivos_a_subir = []
     try:
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
+        archivos_a_subir.append(NOMBRE_ARCHIVO_JSON)
+
         with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
-        with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_mensaje_whatsapp)
-        print(f"Archivos locales guardados: {NOMBRE_ARCHIVO_JSON}, {NOMBRE_ARCHIVO_PROGRAMACION}, {NOMBRE_ARCHIVO_MENSAJE}, {NOMBRE_ARCHIVO_SITEMAP}.")
+        archivos_a_subir.append(NOMBRE_ARCHIVO_PROGRAMACION)
+        
+        with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_html_mensaje)
+        archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
+
+        archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
+        archivos_a_subir.append(nombre_archivo_telegram_txt) # Archivo TXT para Telegram
+        
+        print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
     except Exception as e:
         print(f"Error al guardar archivos locales: {e}")
         return
@@ -334,7 +196,7 @@ def main():
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP]:
+            for nombre_archivo in archivos_a_subir:
                 with open(nombre_archivo, 'rb') as file:
                     print(f"Subiendo '{nombre_archivo}'...")
                     ftp.storbinary(f'STOR {nombre_archivo}', file)
