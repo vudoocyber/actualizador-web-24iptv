@@ -12,7 +12,6 @@ MESES_ESPANOL = {
 }
 
 # --- CONFIGURACIÓN Y SECRETS ---
-# CORREGIDO: URL_MENSAJE obtiene su valor exclusivamente del ambiente
 URL_MENSAJE = os.environ.get("URL_MENSAJE_TELEGRAM_TXT") 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -28,14 +27,19 @@ def obtener_mensaje_web(url):
         return None
         
     try:
-        # Petición GET para descargar el contenido del mensaje (es texto plano)
+        # Petición GET para descargar el contenido del mensaje
         respuesta = requests.get(url)
         respuesta.raise_for_status()
+        
+        # CORRECCIÓN DE CODIFICACIÓN: Forzar la codificación UTF-8 para evitar caracteres raros (mojibake)
+        respuesta.encoding = 'utf-8' 
         
         # Leemos el texto puro.
         mensaje_puro = respuesta.text.strip()
         
         # --- Lógica de Validación de Fecha ---
+        
+        # 1. Buscamos el patrón de fecha: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
         match_fecha = re.search(
             r'(\d{1,2})\s+de\s+([a-zA-Z]+)\s+de\s+(\d{4})', 
             mensaje_puro, 
@@ -51,23 +55,23 @@ def obtener_mensaje_web(url):
         nombre_mes = match_fecha.group(2).lower()
         anio = match_fecha.group(3)
         
-        # Mapeamos el nombre del mes a número
+        # 2. Mapeamos el nombre del mes a número
         numero_mes = MESES_ESPANOL.get(nombre_mes)
         if not numero_mes:
             print(f"Validación de fecha fallida: Nombre de mes no reconocido: {nombre_mes}")
             return None
             
-        # Construimos la cadena en formato universal DD/MM/AAAA
+        # 3. Construimos la cadena en formato universal DD/MM/AAAA
         fecha_str_universal = f"{dia}/{numero_mes}/{anio}" 
 
-        # Parseamos y comparamos
+        # 4. Parseamos y comparamos
         try:
             fecha_mensaje = datetime.strptime(fecha_str_universal, '%d/%m/%Y').date()
         except ValueError as e:
             print(f"Validación de fecha fallida: Error al parsear el formato universal '{fecha_str_universal}'. Error: {e}")
             return None
 
-        # Comparamos con la fecha actual de Ciudad de México
+        # 5. Comparamos con la fecha actual de Ciudad de México
         hoy_mx = datetime.now(MEXICO_TZ).date()
         
         if fecha_mensaje == hoy_mx:
@@ -101,6 +105,8 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     }
     
     try:
+        # Usamos 'json=payload' para forzar Content-Type: application/json; charset=utf-8,
+        # lo cual es crucial para la codificación UTF-8.
         respuesta = requests.post(url_api, json=payload) 
         respuesta.raise_for_status()
         print(f"Mensaje enviado a Telegram con éxito. Respuesta: {respuesta.json()}")
