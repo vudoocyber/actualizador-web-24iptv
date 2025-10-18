@@ -12,6 +12,7 @@ MESES_ESPANOL = {
 }
 
 # --- Configuración de zona horaria y secretos ---
+# Usamos America/Mexico_City como zona horaria de referencia
 MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
 
 URL_MENSAJE = os.environ.get("URL_MENSAJE_MENSAJERIA") 
@@ -27,10 +28,11 @@ def obtener_mensaje_web(url):
         return None
         
     try:
+        # Petición GET para descargar el contenido del mensaje
         respuesta = requests.get(url)
         respuesta.raise_for_status()
         
-        # 1. Extraer el texto puro dentro de <pre>
+        # 1. Extraer el texto puro dentro de <pre> (asumiendo que el script principal lo envuelve)
         html_content = respuesta.text
         match_pre = re.search(r'<pre>(.*?)</pre>', html_content, re.DOTALL)
         
@@ -43,8 +45,7 @@ def obtener_mensaje_web(url):
         # --- Lógica de Validación de Fecha Robusta ---
         
         # 2. Buscamos el patrón de fecha para extraer los componentes exactos.
-        # Patrón: *Sabado 18 de Octubre de 2025*
-        # Extraemos Día (18), Mes (Octubre), Año (2025)
+        # Patrón: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
         match_fecha = re.search(
             r'(\d{1,2})\s+de\s+([a-zA-Z]+)\s+de\s+(\d{4})', 
             mensaje_puro, 
@@ -97,7 +98,7 @@ def obtener_mensaje_web(url):
 
 def enviar_mensaje_telegram(token, chat_id, mensaje):
     """
-    Envía el mensaje de texto a Telegram.
+    Envía el mensaje de texto a Telegram, forzando la codificación UTF-8.
     """
     if not token or not chat_id:
         print("Error: El token del bot o el ID del chat no están configurados.")
@@ -112,7 +113,9 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     }
     
     try:
-        respuesta = requests.post(url_api, data=payload)
+        # CAMBIO CLAVE: Usamos 'json=payload' para forzar Content-Type: application/json; charset=utf-8,
+        # lo que resuelve el problema de los caracteres raros (mojibake).
+        respuesta = requests.post(url_api, json=payload) 
         respuesta.raise_for_status()
         print(f"Mensaje enviado a Telegram con éxito. Respuesta: {respuesta.json()}")
         return True
