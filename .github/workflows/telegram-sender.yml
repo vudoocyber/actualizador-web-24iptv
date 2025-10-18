@@ -1,0 +1,34 @@
+name: Envio Automatico a Telegram
+
+on:
+  schedule:
+    # Se ejecuta sábados y domingos a las 8:00 AM hora de la Ciudad de México (14:00 UTC)
+    - cron: '0 14 * * 6,0'
+  workflow_dispatch:
+
+jobs:
+  enviar_mensaje:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Instalar dependencias
+      # Instalamos requests y las librerías necesarias para la validación de fecha y hora
+      run: pip install requests python-dateutil
+
+    - name: Ejecutar script de envio a Telegram
+      # Configuramos la variable TZ para que Python sepa la zona horaria correcta (GMT-6)
+      run: python enviar_telegram.py
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        URL_MENSAJE_MENSAJERIA: ${{ secrets.URL_MENSAJE_MENSAJERIA }}
+        # Establece la zona horaria para la validación de fecha/hora en Python
+        TZ: America/Mexico_City
