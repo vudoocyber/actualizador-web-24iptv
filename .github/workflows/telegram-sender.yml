@@ -20,15 +20,14 @@ jobs:
         python-version: '3.10'
 
     - name: Instalar dependencias
-      # Instalamos requests y las librerías necesarias para la validación de fecha y hora
+      # Instala requests y python-dateutil para las peticiones web y la validación de fecha
       run: pip install requests python-dateutil
 
     - name: Ejecutar script de envio a Telegram
-      # Configuramos la variable TZ para que Python sepa la zona horaria correcta (GMT-6)
+      # Configuramos la variable TZ para la validación de fecha/hora en México
       run: python enviar_telegram.py
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        URL_MENSAJE_MENSAJERIA: ${{ secrets.URL_MENSAJE_MENSAJERIA }}
-        # Establece la zona horaria para la validación de fecha/hora en Python
-        TZ: America/Mexico_City
+        URL_MENSAJE_TELEGRAM_TXT: ${{ secrets.URL_MENSAJE_TELEGRAM_TXT }}
+        TZ: America/Mexico_City # Establece la zona horaria para la validación del script
