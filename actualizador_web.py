@@ -17,7 +17,8 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
-NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # Archivo de Texto Puro para Telegram
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # NUEVO: Archivo de Texto Puro para Telegram
+# GEMINI_API_KEY se asume que se usa en scripts externos
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
 def aplicar_reglas_html(texto_crudo):
@@ -86,12 +87,14 @@ Dale clic al enlace y entérate de todo en segundos 👇
 
 ⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
     
-    # Versión HTML para subir al web
+    # Versión HTML para subir al web (RESPETANDO EL FORMATO ORIGINAL CON <pre>)
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
     
-    return mensaje_html_final, mensaje_texto_puro # Retornamos ambas versiones
+    # Retornamos AMBAS versiones, HTML y el texto PURO
+    return mensaje_html_final, mensaje_texto_puro 
 
-# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM ---
+
+# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA TELEGRAM (NUEVA) ---
 def generar_archivo_telegram_txt(mensaje_texto_puro):
     """
     Genera un archivo de texto plano con codificación UTF-8 para evitar errores de Telegram.
@@ -106,20 +109,20 @@ def generar_archivo_telegram_txt(mensaje_texto_puro):
         raise # Propagamos el error si no se puede generar el archivo
     return NOMBRE_ARCHIVO_TELEGRAM
 
-# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS (REINTRODUCIDA) ---
+
+# --- 5. FUNCIÓN PARA CREAR JSON DE EVENTOS (Función original que provee el texto crudo) ---
 def crear_json_eventos(texto_crudo):
     """
-    Crea un archivo JSON simple a partir del texto crudo para uso por otros scripts (ranker/fetcher).
+    Crea un archivo JSON simple a partir del texto crudo para que scripts subsiguientes
+    (ranker/fetcher) lo lean y lo procesen.
     """
-    # Usamos una estructura simple para encapsular todo el texto crudo
-    # Esto asegura que los scripts subsiguientes tengan el texto para analizar.
     data = {
-        "fecha_generacion": datetime.now().isoformat(),
+        "fecha_extraccion": datetime.now().isoformat(),
         "contenido_texto_crudo": texto_crudo,
-        # Agrega más campos si los scripts ranker o fetcher los esperan
     }
     
     try:
+        # ensure_ascii=False es crucial para guardar emojis y tildes correctamente
         contenido_json = json.dumps(data, indent=4, ensure_ascii=False)
     except Exception as e:
         print(f"Error al serializar el JSON: {e}")
@@ -165,13 +168,12 @@ def main():
         print(f"ERROR FATAL en la extracción: {e}")
         return
 
-    # No usamos ranking aquí, el JSON contiene el texto para que el ranker lo analice.
-    ranking = [] # Mantener esta variable vacía para compatibilidad si otros scripts la usan
+    # No se usa ranking de IA en este script
     
     print("2. Generando contenido para todos los archivos...")
+    # La función crear_mensaje_whatsapp ahora devuelve HTML (para web) y Texto Puro (para TXT)
     contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
     
-    # Generar el JSON para los scripts subsiguientes
     contenido_json = crear_json_eventos(texto_extraido_filtrado) 
     
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
@@ -182,15 +184,19 @@ def main():
     print("3. Guardando archivos locales...")
     archivos_a_subir = []
     try:
+        # Guardar JSON (events.json)
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
         archivos_a_subir.append(NOMBRE_ARCHIVO_JSON)
 
+        # Guardar HTML Programación (programacion.html)
         with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
         archivos_a_subir.append(NOMBRE_ARCHIVO_PROGRAMACION)
         
+        # Guardar HTML Mensaje (mensaje_whatsapp.html)
         with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_html_mensaje)
         archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
 
+        # Añadir Sitemap y TXT a la lista de subida
         archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
         archivos_a_subir.append(nombre_archivo_telegram_txt) 
         
