@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
+import random # Importamos la librería random para elegir un formato aleatorio
 
 # --- Mapeo de meses para evitar errores de localidad ---
 MESES_ESPANOL = {
@@ -20,6 +21,72 @@ URL_RANKING = os.environ.get("URL_RANKING_JSON")     # eventos-relevantes.json
 MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; Script/1.0)'}
 
+
+# --- NUEVAS VARIABLES DE MENSAJE DINÁMICO (10 Plantillas) ---
+# Usaremos {organizador}, {competidores}, {detalle_partido}, {horarios}, {canales}
+# como placeholders dentro de cada plantilla.
+MENSAJE_PLANTILLAS = [
+    # 1. Énfasis en lo imperdible
+    {
+        "titulo": "🔥 *¡EVENTO IMPERDIBLE DEL DÍA!* 🔥",
+        "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Canales: _{canales}_",
+        "cierre": "⚡ *¡Máxima adrenalina!* Mira la acción aquí:\n"
+    },
+    # 2. Énfasis en la competencia
+    {
+        "titulo": "🚨 *ALERTA DE COMPETENCIA ÉPICA* 🚨",
+        "cuerpo": "*{organizador}*\n🆚 Partido: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕓 Hora CDMX/MEX: *{horarios}*\n📡 Transmisión: _{canales}_",
+        "cierre": "📲 No te quedes fuera. ¡Sintoniza ya!:\n"
+    },
+    # 3. Formato de recordatorio rápido
+    {
+        "titulo": "🔔 *RECORDATORIO: ¡A JUGAR!* 🔔",
+        "cuerpo": "⚽ *{competidores}* — Hoy\n⏱️ Horarios: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
+        "cierre": "🔗 Todos los detalles en nuestra web:\n"
+    },
+    # 4. Formato de Noticia de Última Hora
+    {
+        "titulo": "📰 *HOY EN EL DEPORTE: ¡EVENTAZO!* 📰",
+        "cuerpo": "*{organizador}*\n💥 Enfrentamiento: *{competidores}*\n🌎 Zona Horaria: *{horarios}*\n¡En vivo por! _{canales}_",
+        "cierre": "➡️ Acceso directo y horarios locales:\n"
+    },
+    # 5. Estilo "Vibrante"
+    {
+        "titulo": "🤩 *¡VIBRA CON EL PARTIDO ESTELAR!* 🤩",
+        "cuerpo": "⚽ Evento: *{competidores}*\n🗓️ Fecha: {detalle_partido}\n⌚ ¡Prepara el reloj! *{horarios}*\n📺 Velo en HD: _{canales}_",
+        "cierre": "🔥 ¡La emoción está asegurada! Míralo aquí:\n"
+    },
+    # 6. Estilo "Faltan Pocas Horas"
+    {
+        "titulo": "⏳ *FALTAN POCAS HORAS PARA...* ⏳",
+        "cuerpo": "*{organizador}*\n👊 Duelo: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 Canales: _{canales}_",
+        "cierre": "🚀 ¡Despegamos! Link rápido:\n"
+    },
+    # 7. Formato con ubicación
+    {
+        "titulo": "📍 *¿DÓNDE ESTÁ LA ACCIÓN HOY?* 📍",
+        "cuerpo": "*{organizador}*\n🏟️ Desde el {detalle_partido}\n⚔️ Batalla: *{competidores}*\n⏰ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_",
+        "cierre": "🌐 Toda la programación:\n"
+    },
+    # 8. Énfasis en el canal
+    {
+        "titulo": "📺 *GUÍA RÁPIDA DE TRANSMISIÓN* 📺",
+        "cuerpo": "*{organizador}* - *{competidores}*\n🕐 Horario: *{horarios}*\n🥇 Canales destacados: _{canales}_",
+        "cierre": "👇 Haz click para ver la lista completa de canales:\n"
+    },
+    # 9. Estilo "Clásico"
+    {
+        "titulo": "⭐ *DESTACADO DEL DÍA* ⭐",
+        "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Canales: _{canales}_",
+        "cierre": "➡️ ¡No te lo pierdas! Mira la acción aquí:\n"
+    },
+    # 10. Estilo "Deportivo"
+    {
+        "titulo": "⚽ *EL PARTIDO MÁS ESPERADO* 🏀",
+        "cuerpo": "*{organizador}*\n🏆 Competencia: *{competidores}*\n⏱️ Horario de inicio: *{horarios}*\n📡 Cobertura total: _{canales}_",
+        "cierre": "¡Prepárate! Enlace a la guía completa:\n"
+    }
+]
 
 def validar_fecha_actualizacion(url_json):
     """
@@ -67,7 +134,7 @@ def obtener_eventos_rankeados(url_ranking):
         respuesta.raise_for_status()
         datos = respuesta.json()
         
-        # CORRECCIÓN: Buscamos la clave 'eventos_relevantes'
+        # Buscamos la clave 'eventos_relevantes'
         eventos = datos.get("eventos_relevantes", []) 
         
         print(f"Obtenidos {len(eventos)} eventos rankeados.")
@@ -83,51 +150,45 @@ def obtener_eventos_rankeados(url_ranking):
 
 def formatear_mensaje_telegram(evento):
     """
-    Crea un mensaje atractivo en formato Markdown para Telegram, utilizando emojis Unicode directos.
+    Crea un mensaje atractivo en formato Markdown para Telegram, seleccionando una 
+    plantilla de mensaje aleatoria.
     """
-    # Escapamos caracteres especiales de Markdown (., -, !, #, (, ), etc.)
+    # Escapamos caracteres especiales de Markdown
     def escape_markdown(text):
         # Escapamos los caracteres que Telegram podría interpretar como formato
-        # Solo escapamos los que no sean el asterisco usado para negritas
         return re.sub(r'([\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
-    # El evento rankeado es un objeto complejo (tiene "partidos")
+    # Obtenemos la información del primer partido (que es el evento rankeado)
     if evento.get('partidos'):
         partido_principal = evento['partidos'][0]
     else:
         partido_principal = evento 
 
-    # Extracción segura de datos
-    horarios = partido_principal.get('horarios', 'Sin hora')
-    canales = ", ".join(partido_principal.get('canales', ['Canal Desconocido']))
-    competidores = " vs ".join(partido_principal.get('competidores', ['Competidores']))
-    organizador = evento.get('evento_principal', 'Evento Deportivo')
-    detalle_partido = partido_principal.get('detalle_partido', 'Ubicación Desconocida')
+    # Extracción y limpieza segura de datos (aplicando escape al extraer)
+    horarios = escape_markdown(partido_principal.get('horarios', 'Sin hora'))
+    canales = escape_markdown(", ".join(partido_principal.get('canales', ['Canal Desconocido'])))
+    competidores = escape_markdown(" vs ".join(partido_principal.get('competidores', ['Competidores'])))
+    organizador = escape_markdown(evento.get('evento_principal', 'Evento Deportivo'))
+    detalle_partido = escape_markdown(partido_principal.get('detalle_partido', 'Ubicación Desconocida'))
     
-    # Asignamos un emoji basado en el contenido del organizador
-    clean_organizador = re.sub(r'[\U0001F300-\U0001F6FF\u2600-\u27BF]+', '', organizador).strip()
+    # 1. SELECCIONAR PLANTILLA ALEATORIA
+    plantilla = random.choice(MENSAJE_PLANTILLAS)
     
-    emoji = "⭐"
-    if "BOX" in clean_organizador or "UFC" in clean_organizador:
-        emoji = "🥊"
-    elif "MX" in clean_organizador or "Liga" in clean_organizador or "⚽" in organizador:
-        emoji = "⚽"
-    elif "NFL" in clean_organizador or "🏈" in organizador:
-        emoji = "🏈"
-    elif "NBA" in clean_organizador or "WNBA" in clean_organizador or "🏀" in organizador:
-        emoji = "🏀"
-    elif "MLB" in clean_organizador or "⚾" in organizador:
-        emoji = "⚾"
-        
-    # Construcción del mensaje con emojis Unicode y texto limpio
+    # 2. CONSTRUIR CUERPO DEL MENSAJE (Sustitución de placeholders)
+    # Rellenamos los placeholders con los datos de escape_markdown ya aplicados
+    cuerpo_dinamico = plantilla["cuerpo"].format(
+        organizador=organizador,
+        competidores=competidores,
+        detalle_partido=detalle_partido,
+        horarios=horarios,
+        canales=canales
+    )
+    
+    # 3. CONSTRUCCIÓN FINAL
     mensaje = (
-        f"{emoji} *¡EVENTO IMPERDIBLE DEL DÍA!* {emoji}\n\n"
-        f"*{escape_markdown(organizador)}*\n"
-        f"🏆 Encuentro: *{escape_markdown(competidores)}*\n"
-        f"🏟️ Sede: {escape_markdown(detalle_partido)}\n"
-        f"⏰ Horario: *{escape_markdown(horarios)}*\n"
-        f"📺 Canales: _{escape_markdown(canales)}_\n\n"
-        f"⚡ *¡No te lo pierdas!* Mira la acción aquí:\n"
+        f"{plantilla['titulo']}\n\n"
+        f"{cuerpo_dinamico}\n\n"
+        f"{plantilla['cierre']}"
         f"https://24hometv.xyz/"
     )
     return mensaje
