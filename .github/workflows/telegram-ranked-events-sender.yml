@@ -2,8 +2,9 @@ name: Envio Automatico Eventos Rankeados
 
 on:
   schedule:
-    # Se ejecuta sábados y domingos a las 8:30 AM hora de la Ciudad de México (14:30 UTC)
-    - cron: '30 14 * * 6,0'
+    # Se ejecuta TODOS LOS DÍAS a las 8:30 AM hora de la Ciudad de México (14:30 UTC)
+    # Cron: '30 14 * * *' (El asterisco al final indica 'cualquier día de la semana')
+    - cron: '30 14 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,7 +21,7 @@ jobs:
         python-version: '3.10'
 
     - name: Instalar dependencias
-      # Instala requests para peticiones y python-dateutil para manejo de zona horaria
+      # Instala requests y python-dateutil para las peticiones web y la validación de fecha
       run: pip install requests python-dateutil
 
     - name: Ejecutar script de envio de ranking
