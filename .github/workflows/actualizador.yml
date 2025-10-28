@@ -22,8 +22,9 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # Añadimos la nueva librería de Google
-          pip install requests beautifulsoup4 google-generativeai
+          # --- LÍNEA CORREGIDA ---
+          # Añadimos 'pytz' y 'packaging' que son requeridas por las librerías.
+          pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
 
       - name: Ejecutar script de actualizacion y subida
         env:
