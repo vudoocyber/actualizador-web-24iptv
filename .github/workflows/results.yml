@@ -16,8 +16,9 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # Añadimos --upgrade para obtener siempre la última versión de la librería
-          pip install --upgrade requests beautifulsoup4 google-generativeai pytz
+          # --- LÍNEA CORREGIDA ---
+          # Añadimos la librería 'packaging' que ahora es requerida.
+          pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
       - name: Ejecutar script buscador de resultados
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
