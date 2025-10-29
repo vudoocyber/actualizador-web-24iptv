@@ -17,7 +17,7 @@ NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
-NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt' # NUEVA CONSTANTE
+NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt'
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
@@ -42,7 +42,7 @@ def aplicar_reglas_html(texto_crudo):
             resultado_html += f"<p><strong>{linea}</strong></p><br /><br />\n"
     return resultado_html
 
-# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP (MODIFICADA LA SALIDA) ---
+# --- 3. FUNCIÓN PARA GENERAR EL MENSAJE DE WHATSAPP ---
 def crear_mensaje_whatsapp(texto_crudo):
     REGEX_EMOJI = re.compile(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
     lineas = texto_crudo.strip().split('\n')
@@ -90,38 +90,34 @@ Dale clic al enlace y entérate de todo en segundos 👇
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
     
-    # MODIFICACIÓN: Retornamos AMBOS: HTML para la web y Texto Puro para el nuevo archivo TXT
     return mensaje_html_final, mensaje_texto_puro 
 
-
-# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT PURO PARA MENSAJERÍA (NUEVA) ---
+# --- 4. FUNCIÓN PARA GENERAR ARCHIVO TXT ---
 def generar_archivo_telegram_txt(mensaje_texto_puro):
-    """
-    Genera un archivo de texto plano con codificación UTF-8.
-    """
     try:
-        # Escribimos el mensaje con codificación UTF-8 explícita
         with open(NOMBRE_ARCHIVO_TELEGRAM, 'w', encoding='utf-8') as f:
             f.write(mensaje_texto_puro)
-        print(f"Archivo de texto plano '{NOMBRE_ARCHIVO_TELEGRAM}' generado para mensajería.")
+        print(f"Archivo de texto plano '{NOMBRE_ARCHIVO_TELEGRAM}' generado.")
     except Exception as e:
-        print(f"Error al generar el archivo de texto plano para mensajería: {e}")
+        print(f"Error al generar el archivo de texto plano: {e}")
         raise 
     return NOMBRE_ARCHIVO_TELEGRAM
 
-
-# --- 5. FUNCIÓN PARA COMUNICARSE CON GEMINI (SIMPLIFICADA) ---
+# --- 5. FUNCIÓN SIMULADA (NO USA IA) ---
 def obtener_ranking_eventos(texto_crudo):
-    # Esta funcionalidad está eliminada, solo devuelve una lista vacía para no romper el JSON.
-    print("ADVERTENCIA: La funcionalidad de ranking ha sido eliminada.")
+    print("ADVERTENCIA: La funcionalidad de ranking con IA está desactivada en este script.")
     return []
 
-# --- 6. FUNCIÓN JSON (CON LÓGICA DE SEPARACIÓN DE BLOQUES) ---
+# --- 6. FUNCIÓN JSON (CON NUEVA ETIQUETA `fecha_guia`) ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
+    
+    meses_es = {
+        "enero": "01", "febrero": "02", "marzo": "03", "abril": "04", "mayo": "05", "junio": "06",
+        "julio": "07", "agosto": "08", "septiembre": "09", "octubre": "10", "noviembre": "11", "diciembre": "12"
+    }
     
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
 
-    # Funciones internas para parseo del JSON...
     def es_linea_de_titulo(linea):
         if "WWE Wrestling" in linea or "Evento BOX" in linea:
             return True
@@ -161,7 +157,7 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
             
         return partido
 
-    datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "titulo_guia": "", "eventos": []}
+    datos_json = {"fecha_actualizacion": datetime.now().isoformat(), "fecha_guia": "", "titulo_guia": "", "eventos": []}
     lineas = [l.strip() for l in texto_crudo.strip().split('\n') if l.strip()]
     
     bloques_evento = []
@@ -170,6 +166,18 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
         if "Eventos Deportivos" in linea:
             fecha_texto = linea.replace("Eventos Deportivos ", "").strip()
             year_actual = datetime.now().year
+            
+            try:
+                partes_fecha = fecha_texto.lower().split()
+                if len(partes_fecha) >= 4:
+                    dia = partes_fecha[1]
+                    mes_str = partes_fecha[3]
+                    mes_num = meses_es.get(mes_str)
+                    if mes_num:
+                        datos_json["fecha_guia"] = f"{year_actual}-{mes_num}-{dia.zfill(2)}"
+            except Exception as e:
+                print(f"ADVERTENCIA: No se pudo parsear la fecha de la guía '{fecha_texto}'. Error: {e}")
+
             titulo_completo_html = f"Eventos Deportivos y Especiales, {year_actual} <br /> {fecha_texto}"
             datos_json["titulo_guia"] = titulo_completo_html
             continue
@@ -212,7 +220,6 @@ def crear_json_eventos(texto_crudo, ranking_relevancia):
         if evento_json["partidos"]:
             lista_eventos_original.append(evento_json)
 
-    # El JSON solo contendrá la lista de eventos originales (sin ranking_relevancia)
     datos_json["eventos"] = lista_eventos_original
     return json.dumps(datos_json, indent=4, ensure_ascii=False)
 
@@ -254,32 +261,20 @@ def main():
 
     ranking = obtener_ranking_eventos(texto_extraido_filtrado)
 
-    print("2. Generando contenido para los 4 archivos...")
-    # MODIFICACIÓN: Ahora obtenemos el HTML y el Texto Puro (para TXT)
+    print("2. Generando contenido para los 5 archivos...")
     contenido_html_mensaje, contenido_texto_puro_telegram = crear_mensaje_whatsapp(texto_extraido_filtrado)
-    
     contenido_json = crear_json_eventos(texto_extraido_filtrado, ranking)
-    
     contenido_html_programacion = aplicar_reglas_html(texto_extraido_filtrado)
-    nombre_archivo_telegram_txt = generar_archivo_telegram_txt(contenido_texto_puro_telegram) # Genera el TXT
+    generar_archivo_telegram_txt(contenido_texto_puro_telegram)
     crear_sitemap()
     print("Contenido generado.")
 
     print("3. Guardando archivos locales...")
-    archivos_a_subir = []
+    archivos_a_subir = [NOMBRE_ARCHIVO_JSON, NOMBRE_ARCHIVO_PROGRAMACION, NOMBRE_ARCHIVO_MENSAJE, NOMBRE_ARCHIVO_SITEMAP, NOMBRE_ARCHIVO_TELEGRAM]
     try:
         with open(NOMBRE_ARCHIVO_JSON, 'w', encoding='utf-8') as f: f.write(contenido_json)
-        archivos_a_subir.append(NOMBRE_ARCHIVO_JSON)
-
         with open(NOMBRE_ARCHIVO_PROGRAMACION, 'w', encoding='utf-8') as f: f.write(contenido_html_programacion)
-        archivos_a_subir.append(NOMBRE_ARCHIVO_PROGRAMACION)
-        
         with open(NOMBRE_ARCHIVO_MENSAJE, 'w', encoding='utf-8') as f: f.write(contenido_html_mensaje)
-        archivos_a_subir.append(NOMBRE_ARCHIVO_MENSAJE)
-
-        archivos_a_subir.append(NOMBRE_ARCHIVO_SITEMAP)
-        archivos_a_subir.append(nombre_archivo_telegram_txt) # AÑADIDO: Archivo TXT
-        
         print(f"Archivos locales guardados: {', '.join(archivos_a_subir)}.")
     except Exception as e:
         print(f"Error al guardar archivos locales: {e}")
