@@ -21,15 +21,17 @@ jobs:
         python-version: '3.10'
 
     - name: Instalar dependencias
-      # Instala requests y python-dateutil para las peticiones web y la validación de fecha
-      run: pip install requests python-dateutil
+      run: |
+        python -m pip install --upgrade pip
+        # --- LÍNEA CORREGIDA ---
+        # Añadimos la librería 'pytz' que ahora es requerida por el script.
+        pip install requests pytz
 
     - name: Ejecutar script de envio de ranking
-      # Inyectamos todos los Secrets y definimos la zona horaria
-      run: python enviar_eventos_rankeados_telegram.py
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         URL_EVENTOS_JSON: ${{ secrets.URL_EVENTOS_JSON }}
         URL_RANKING_JSON: ${{ secrets.URL_RANKING_JSON }}
-        TZ: America/Mexico_City # Zona horaria para validación del script
+        TZ: America/Mexico_City
+      run: python enviar_eventos_rankeados_telegram.py
