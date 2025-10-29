@@ -15,32 +15,22 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
 # --- 2. FUNCIONES AUXILIARES ---
 def identificar_deporte(evento_principal):
     texto = evento_principal.lower()
-    if any(keyword in texto for keyword in ["fútbol", "liga", "copa", "championship", "eredivise", "superliga", "⚽"]):
-        return "futbol"
-    if any(keyword in texto for keyword in ["nfl", "cfl", "🏈"]):
-        return "futbol_americano"
-    if any(keyword in texto for keyword in ["mlb", "beisbol", "⚾"]):
-        return "beisbol"
-    if any(keyword in texto for keyword in ["nba", "wnba", "cibacopa", "🏀"]):
-        return "baloncesto"
-    if any(keyword in texto for keyword in ["ufc", "box", "wrestling", "🤼", "🥊"]):
-        return "combate"
-    if any(keyword in texto for keyword in ["tenis", "open", "🎾"]):
-        return "tenis"
-    if any(keyword in texto for keyword in ["nascar", "racing", "🏎️"]):
-        return "carreras"
-    if any(keyword in texto for keyword in ["golf", "pga", "liv", "⛳"]):
-        return "golf"
-    if any(keyword in texto for keyword in ["voleybol", "volleyball", "🏐"]):
-        return "voleibol"
-    if any(keyword in texto for keyword in ["rugby", "🏉"]):
-        return "rugby"
-    if any(keyword in texto for keyword in ["nhl", "hockey", "🏒"]):
-        return "hockey"
+    if any(keyword in texto for keyword in ["fútbol", "liga", "copa", "championship", "eredivise", "superliga", "⚽"]): return "futbol"
+    if any(keyword in texto for keyword in ["nfl", "cfl", "🏈"]): return "futbol_americano"
+    if any(keyword in texto for keyword in ["mlb", "beisbol", "⚾"]): return "beisbol"
+    if any(keyword in texto for keyword in ["nba", "wnba", "cibacopa", "🏀"]): return "baloncesto"
+    if any(keyword in texto for keyword in ["ufc", "box", "wrestling", "🤼", "🥊"]): return "combate"
+    if any(keyword in texto for keyword in ["tenis", "open", "🎾"]): return "tenis"
+    if any(keyword in texto for keyword in ["nascar", "racing", "🏎️"]): return "carreras"
+    if any(keyword in texto for keyword in ["golf", "pga", "liv", "⛳"]): return "golf"
+    if any(keyword in texto for keyword in ["voleybol", "volleyball", "🏐"]): return "voleibol"
+    if any(keyword in texto for keyword in ["rugby", "🏉"]): return "rugby"
+    if any(keyword in texto for keyword in ["nhl", "hockey", "🏒"]): return "hockey"
     return "default"
 
 def extraer_hora_centro(horario_str):
@@ -76,55 +66,60 @@ def obtener_url_resultado_gemini(busqueda_precisa, fecha_evento):
         response = model.generate_content(prompt, request_options={'timeout': 90})
         url_resultado = response.text.strip()
         if url_resultado.startswith("http"):
-            print(f"  > URL de Gemini generada para '{busqueda_precisa}'")
+            print(f"  > URL de Gemini generada: {url_resultado}")
             return url_resultado
         return None
     except Exception as e:
-        print(f"  > ERROR al contactar con Gemini para '{busqueda_precisa}': {e}")
+        print(f"  > ERROR al contactar con Gemini: {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL ---
+# --- 3. FUNCIÓN PRINCIPAL (CON VALIDACIÓN DE FECHA) ---
 def main():
     print(f"Iniciando proceso de búsqueda de resultados...")
-    mexico_city_tz = pytz.timezone("America/Mexico_City")
     
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
         respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
+
+        # --- INICIO DE LA NUEVA LÓGICA DE VALIDACIÓN ---
+        fecha_guia_str = datos.get("fecha_guia")
+        if not fecha_guia_str:
+            print("ERROR: La etiqueta 'fecha_guia' no fue encontrada en events.json. Proceso detenido.")
+            return
+
+        hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
+
+        if fecha_guia_str != hoy_mexico_str:
+            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no es la de hoy ({hoy_mexico_str}). No se buscarán resultados.")
+            return # Detiene la ejecución si las fechas no coinciden
+        
+        print(f"Fecha de la guía ({fecha_guia_str}) confirmada. Continuando con la búsqueda de resultados.")
+        # --- FIN DE LA NUEVA LÓGICA DE VALIDACIÓN ---
+
         lista_eventos_original = datos.get("eventos", [])
         titulo_guia = datos.get("titulo_guia", "")
-        fecha_extraida = re.sub('<[^<]+?>', '', titulo_guia).split(',')[-1].strip().replace(str(datetime.now().year), "").strip()
-        if not lista_eventos_original or not fecha_extraida:
-            raise ValueError("El archivo events.json está vacío o no contiene una fecha en el título.")
-        print(f"Archivo events.json leído. Fecha de la guía: {fecha_extraida}")
+        fecha_extraida_para_busqueda = re.sub('<[^<]+?>', '', titulo_guia).split(',')[-1].strip().replace(str(datetime.now().year), "").strip()
+
     except Exception as e:
-        print(f"ERROR FATAL al leer el archivo JSON: {e}")
+        print(f"ERROR FATAL al leer o validar el archivo JSON: {e}")
         return
 
     print("2. Identificando partidos finalizados y buscando URLs de resultados...")
     resultados_finales = []
     
-    # --- DICCIONARIO DE DURACIONES (TIEMPOS AJUSTADOS) ---
     duracion_por_deporte = {
-        "futbol": 1.9, # Un poco menos de 2h
-        "futbol_americano": 3.3, # Un poco menos de 3.5h
-        "beisbol": 2.7, # Ajustado para juegos más rápidos
-        "baloncesto": 2.3, # Un poco menos de 2.5h
-        "combate": 3.0,
-        "tenis": 2.5,
-        "carreras": 3.5,
-        "golf": 4.5,
-        "voleibol": 2.0,
-        "rugby": 2.0,
-        "hockey": 2.5,
-        "default": 3.0
+        "futbol": 1.9, "futbol_americano": 3.3, "beisbol": 2.7, "baloncesto": 2.3,
+        "combate": 3.0, "tenis": 2.5, "carreras": 3.5, "golf": 4.5,
+        "voleibol": 2.0, "rugby": 2.0, "hockey": 2.5, "default": 3.0
     }
 
-    hora_actual_mexico = datetime.now(mexico_city_tz)
+    hora_actual_mexico = datetime.now(MEXICO_TZ)
     hora_actual_float = hora_actual_mexico.hour + (hora_actual_mexico.minute / 60.0)
     print(f"Hora actual (Ciudad de México): {hora_actual_mexico.strftime('%I:%M %p %Z')}")
+
+    emoji_pattern = re.compile("[" u"\U0001F600-\U0001F64F" u"\U0001F300-\U0001F5FF" u"\U0001F680-\U0001F6FF" u"\U0001F1E0-\U0001F1FF" u"\u2600-\u26FF" u"\u2700-\u27BF" "]+", flags=re.UNICODE)
 
     for evento in lista_eventos_original:
         if "partido_relevante" in evento: continue
@@ -144,12 +139,12 @@ def main():
             if hora_actual_float > hora_ct_24 + tiempo_de_espera:
                 print(f"- Partido finalizado detectado ({deporte_actual}, espera: {tiempo_de_espera}h): {partido['descripcion']}")
                 
-                evento_principal_limpio = re.sub(r'[^\w\s]', '', evento['evento_principal']).strip()
+                evento_principal_limpio = emoji_pattern.sub('', evento['evento_principal']).strip()
                 busqueda_precisa = f"{evento_principal_limpio} {partido['descripcion']}"
                 if "resultado" not in busqueda_precisa.lower():
                     busqueda_precisa = f"Resultado {busqueda_precisa}"
                 
-                url = obtener_url_resultado_gemini(busqueda_precisa, fecha_extraida)
+                url = obtener_url_resultado_gemini(busqueda_precisa, fecha_extraida_para_busqueda)
                 if url:
                     resultados_finales.append({
                         "descripcion": partido["descripcion"],
