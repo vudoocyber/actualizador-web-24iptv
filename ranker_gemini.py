@@ -70,9 +70,11 @@ def obtener_ranking_eventos(lista_eventos):
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL (CON VALIDACIÓN DE FECHA) ---
+# --- 3. FUNCIÓN PRINCIPAL ---
 def main():
     print(f"Iniciando proceso de ranking de eventos...")
+    
+    fecha_actualizacion_iso = datetime.now(MEXICO_TZ).isoformat()
     
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
@@ -80,21 +82,18 @@ def main():
         respuesta.raise_for_status()
         datos = respuesta.json()
         
-        # --- INICIO DE LA NUEVA LÓGICA DE VALIDACIÓN ---
         fecha_guia_str = datos.get("fecha_guia")
         if not fecha_guia_str:
-            print("ERROR: La etiqueta 'fecha_guia' no fue encontrada en events.json. Proceso detenido.")
+            print("ERROR: No se encontró la etiqueta 'fecha_guia' en events.json. Proceso detenido.")
             return
 
         hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
-
         if fecha_guia_str != hoy_mexico_str:
-            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no es la de hoy ({hoy_mexico_str}). No se actualizará el ranking.")
+            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no coincide con la fecha de hoy ({hoy_mexico_str}).")
+            print("El ranking de eventos no se actualizará para evitar mostrar datos incorrectos.")
             return
         
         print(f"Fecha de la guía ({fecha_guia_str}) confirmada. Continuando con el ranking.")
-        # --- FIN DE LA NUEVA LÓGICA DE VALIDACIÓN ---
-        
         lista_eventos_original = datos.get("eventos", [])
         if not lista_eventos_original:
             raise ValueError("El archivo events.json está vacío.")
@@ -144,8 +143,10 @@ def main():
         
         print(f"Ranking final después de aplicar filtros: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes]}")
     
+    # --- CONSTRUCCIÓN DEL JSON DE SALIDA (AÑADIENDO fecha_guia) ---
     json_salida = {
-        "fecha_actualizacion": datetime.now(MEXICO_TZ).isoformat(),
+        "fecha_actualizacion": fecha_actualizacion_iso,
+        "fecha_guia": fecha_guia_str, # AÑADIMOS LA FECHA DE LA GUÍA
         "eventos_relevantes": eventos_relevantes
     }
 
