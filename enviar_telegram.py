@@ -1,91 +1,34 @@
 import requests
+import json
 import os
-import re
 from datetime import datetime
-from zoneinfo import ZoneInfo
-
-# --- Mapeo de meses para evitar errores de localidad ---
-MESES_ESPANOL = {
-    'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
-    'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
-    'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
-}
+import pytz # Usamos pytz para consistencia con los otros scripts
 
 # --- CONFIGURACIÓN Y SECRETS ---
-URL_MENSAJE = os.environ.get("URL_MENSAJE_TELEGRAM_TXT") 
+URL_JSON_FUENTE = "https://24hometv.xyz/events.json" # URL del JSON principal
+URL_MENSAJE_TXT = os.environ.get("URL_MENSAJE_TELEGRAM_TXT") 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
+MEXICO_TZ = pytz.timezone("America/Mexico_City") 
 
 
 def obtener_mensaje_web(url):
     """
-    Descarga el contenido del archivo de texto plano y valida que la fecha sea la actual.
+    Descarga el contenido del archivo de texto plano.
+    La validación de fecha ya no se hace aquí.
     """
     if not url:
-        print("Error: La URL del mensaje TXT no está configurada en los Secrets.")
+        print("Error: La URL del mensaje TXT no está configurada.")
         return None
         
     try:
-        # Petición GET para descargar el contenido del mensaje
         respuesta = requests.get(url)
         respuesta.raise_for_status()
-        
-        # CORRECCIÓN DE CODIFICACIÓN: Forzar la codificación UTF-8 para evitar caracteres raros (mojibake)
         respuesta.encoding = 'utf-8' 
-        
-        # Leemos el texto puro.
-        mensaje_puro = respuesta.text.strip()
-        
-        # --- Lógica de Validación de Fecha ---
-        
-        # 1. Buscamos el patrón de fecha: DD de Mes de AAAA (ej: 18 de Octubre de 2025)
-        match_fecha = re.search(
-            r'(\d{1,2})\s+de\s+([a-zA-Z]+)\s+de\s+(\d{4})', 
-            mensaje_puro, 
-            re.IGNORECASE
-        )
-        
-        if not match_fecha:
-            print("Validación de fecha fallida: No se encontró el patrón de fecha (DD de Mes de AAAA) en el mensaje.")
-            return None
-
-        # Componentes de la fecha
-        dia = match_fecha.group(1).zfill(2)
-        nombre_mes = match_fecha.group(2).lower()
-        anio = match_fecha.group(3)
-        
-        # 2. Mapeamos el nombre del mes a número
-        numero_mes = MESES_ESPANOL.get(nombre_mes)
-        if not numero_mes:
-            print(f"Validación de fecha fallida: Nombre de mes no reconocido: {nombre_mes}")
-            return None
-            
-        # 3. Construimos la cadena en formato universal DD/MM/AAAA
-        fecha_str_universal = f"{dia}/{numero_mes}/{anio}" 
-
-        # 4. Parseamos y comparamos
-        try:
-            fecha_mensaje = datetime.strptime(fecha_str_universal, '%d/%m/%Y').date()
-        except ValueError as e:
-            print(f"Validación de fecha fallida: Error al parsear el formato universal '{fecha_str_universal}'. Error: {e}")
-            return None
-
-        # 5. Comparamos con la fecha actual de Ciudad de México
-        hoy_mx = datetime.now(MEXICO_TZ).date()
-        
-        if fecha_mensaje == hoy_mx:
-            print(f"Validación de fecha exitosa: El mensaje corresponde a la fecha actual ({hoy_mx}).")
-            return mensaje_puro
-        else:
-            print(f"Validación de fecha fallida: Mensaje desactualizado. Mensaje: {fecha_mensaje} | Hoy: {hoy_mx}.")
-            return None
+        return respuesta.text.strip()
 
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener el mensaje de la web desde {url}: {e}")
-        return None
-    except Exception as e:
-        print(f"Error durante el proceso de validación: {e}")
         return None
 
 def enviar_mensaje_telegram(token, chat_id, mensaje):
@@ -105,18 +48,45 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     }
     
     try:
-        # Usamos 'json=payload' para forzar Content-Type: application/json; charset=utf-8,
-        # lo cual es crucial para la codificación UTF-8.
         respuesta = requests.post(url_api, json=payload) 
         respuesta.raise_for_status()
-        print(f"Mensaje enviado a Telegram con éxito. Respuesta: {respuesta.json()}")
+        print(f"Mensaje enviado a Telegram con éxito.")
         return True
     except requests.exceptions.RequestException as e:
         print(f"Error al enviar el mensaje a Telegram: {e}")
+        print(f"Respuesta del servidor: {respuesta.text}")
         return False
 
 def main():
-    mensaje = obtener_mensaje_web(URL_MENSAJE)
+    print("Iniciando proceso de envío de mensaje a Telegram...")
+    
+    try:
+        print(f"1. Descargando {URL_JSON_FUENTE} para validar fecha...")
+        respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
+        respuesta.raise_for_status()
+        datos = respuesta.json()
+        
+        # --- LÓGICA DE VALIDACIÓN DE FECHA ---
+        fecha_guia_str = datos.get("fecha_guia")
+        if not fecha_guia_str:
+            print("ERROR: No se encontró la etiqueta 'fecha_guia' en events.json. Proceso detenido.")
+            return
+
+        hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
+
+        if fecha_guia_str != hoy_mexico_str:
+            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no es la de hoy ({hoy_mexico_str}). No se enviará el mensaje.")
+            return
+        
+        print(f"Fecha de la guía ({fecha_guia_str}) confirmada. Procediendo a enviar mensaje.")
+        # --- FIN DE LA LÓGICA DE VALIDACIÓN ---
+
+    except Exception as e:
+        print(f"ERROR FATAL al leer o validar el archivo JSON: {e}")
+        return
+
+    # Si la validación de fecha fue exitosa, continuamos
+    mensaje = obtener_mensaje_web(URL_MENSAJE_TXT)
     
     if mensaje:
         print(f"Mensaje obtenido (Longitud: {len(mensaje)}). Enviando a Telegram...")
@@ -126,3 +96,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print("--- Proceso de Telegram finalizado ---")
