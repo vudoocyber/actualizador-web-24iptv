@@ -15,9 +15,7 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-# Definimos la zona horaria de la Ciudad de México
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
-
 
 # --- 2. FUNCIÓN PARA LLAMAR A GEMINI ---
 def obtener_ranking_eventos(lista_eventos):
@@ -44,7 +42,6 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # Prompt ahora pide 5 eventos y ya no contiene la regla de exclusión
         prompt = f"""
         Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
         La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
@@ -77,7 +74,6 @@ def obtener_ranking_eventos(lista_eventos):
 def main():
     print(f"Iniciando proceso de ranking de eventos...")
     
-    # 1. Obtener la marca de tiempo para el archivo de salida
     fecha_actualizacion_iso = datetime.now(MEXICO_TZ).isoformat()
     
     try:
@@ -85,12 +81,26 @@ def main():
         respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
+        
+        # --- NUEVO: Verificación de fecha de la guía ---
+        fecha_guia_str = datos.get("fecha_guia")
+        if not fecha_guia_str:
+            print("ERROR: No se encontró la etiqueta 'fecha_guia' en events.json. Proceso detenido.")
+            return
+
+        hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
+        if fecha_guia_str != hoy_mexico_str:
+            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no coincide con la fecha de hoy ({hoy_mexico_str}).")
+            print("El ranking de eventos no se actualizará para evitar mostrar datos incorrectos.")
+            return
+        
+        print(f"Fecha de la guía ({fecha_guia_str}) confirmada. Continuando con el ranking.")
         lista_eventos_original = datos.get("eventos", [])
         if not lista_eventos_original:
             raise ValueError("El archivo events.json está vacío.")
-        print("Archivo events.json leído correctamente.")
+        
     except Exception as e:
-        print(f"ERROR FATAL al leer el archivo JSON: {e}")
+        print(f"ERROR FATAL al leer o validar el archivo JSON: {e}")
         return
 
     ranking_crudo = obtener_ranking_eventos(lista_eventos_original)
@@ -99,11 +109,9 @@ def main():
         print("Fallo en la API de Gemini. Se generará una lista de relevantes vacía para limpiar la página.")
         eventos_relevantes = []
     else:
-        # --- INICIO DE LA LÓGICA DE FILTRADO POR CÓDIGO ---
         print("2. Aplicando filtro de exclusión por código...")
-        palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino"] # Se agrega 'Femenino' para robustez
+        palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino"]
         
-        # Encontrar los objetos de evento completos que coinciden con el ranking
         eventos_rankeados_completos = []
         descripciones_rankeadas_unicas = set()
 
@@ -112,10 +120,7 @@ def main():
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
                     descripcion_corta = partido.get("descripcion", "")
-                    
-                    # Verificación: La descripción rankeada debe estar contenida en el evento/partido.
                     if descripcion_corta and descripcion_corta in desc_relevante and descripcion_corta not in descripciones_rankeadas_unicas:
-                        # Guardamos el evento completo y la descripción para filtrar
                         eventos_rankeados_completos.append((evento, partido))
                         descripciones_rankeadas_unicas.add(descripcion_corta)
                         encontrado = True
@@ -123,15 +128,12 @@ def main():
                 if encontrado:
                     break
         
-        # Ahora, filtramos esa lista de eventos completos y limitamos a 3 (o los que haya)
         eventos_relevantes = []
         for evento, partido in eventos_rankeados_completos:
             if len(eventos_relevantes) >= 3:
                 break
             
             evento_principal = evento.get("evento_principal", "")
-            
-            # FILTRO: Exclusión de ligas/eventos femeninos
             if not any(keyword in evento_principal for keyword in palabras_prohibidas):
                 evento_relevante = {
                     "evento_principal": evento_principal,
@@ -139,13 +141,11 @@ def main():
                     "partidos": [partido]
                 }
                 eventos_relevantes.append(evento_relevante)
-        # --- FIN DE LA LÓGICA DE FILTRADO ---
         
         print(f"Ranking final después de aplicar filtros: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes]}")
     
-    # --- CONSTRUCCIÓN DEL JSON DE SALIDA (Añadiendo fecha_actualizacion) ---
     json_salida = {
-        "fecha_actualizacion": fecha_actualizacion_iso, # NUEVA CLAVE DE FECHA
+        "fecha_actualizacion": fecha_actualizacion_iso,
         "eventos_relevantes": eventos_relevantes
     }
 
