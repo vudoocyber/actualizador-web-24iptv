@@ -2,20 +2,20 @@ import requests
 import os
 import json
 from datetime import datetime
-import pytz
+import pytz # Usamos pytz para consistencia
 import re
-import random
+import random 
 
 # --- CONFIGURACIÓN Y SECRETS ---
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-URL_RANKING = os.environ.get("URL_RANKING_JSON")
-MEXICO_TZ = pytz.timezone(os.environ.get("TZ", "America/Mexico_City"))
+# URL_VALIDACION ya no es necesaria, se elimina.
+URL_RANKING = os.environ.get("URL_RANKING_JSON")     
+MEXICO_TZ = pytz.timezone(os.environ.get("TZ", "America/Mexico_City")) 
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; Script/1.0)'}
 
 # --- DICCIONARIO DE PLANTILLAS POR DEPORTE (AMPLIADO) ---
 PLANTILLAS_POR_DEPORTE = {
-    # --- ⚽ FÚTBOL (SOCCER) - 10 Plantillas ---
     "⚽": [
         {"titulo": "⚽ *¡PARTIDAZO DEL DÍA!* ⚽", "cuerpo": "🏆 Duelo: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "⚡ ¡Que ruede el balón! Sigue la acción aquí:\n"},
         {"titulo": "🚨 *ALERTA DE GOL* 🚨", "cuerpo": "*{organizador}*\n🆚 Encuentro: *{competidores}*\n📍 Estadio: {detalle_partido}\n🕓 Hora CDMX: *{horarios}*\n📡 Cobertura: _{canales}_", "cierre": "📲 ¡No te quedes fuera! Sintoniza ya:\n"},
@@ -28,15 +28,13 @@ PLANTILLAS_POR_DEPORTE = {
         {"titulo": "⏳ *¡A POCOS MINUTOS DEL SILBATAZO INICIAL!* ⏳", "cuerpo": "El partido está por comenzar.\n⚽ *{competidores}*\n⏰ Horario: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "¡No te lo pierdas! Link directo:\n"},
         {"titulo": "📈 *DUELO CLAVE EN LA TABLA* 📈", "cuerpo": "Puntos vitales en juego para ambos equipos.\n🆚 Partido: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕓 Hora: *{horarios}*\n📡 Canales: _{canales}_", "cierre": "Sigue el minuto a minuto aquí:\n"}
     ],
-    # --- 🏈 FÚTBOL AMERICANO - 5 Plantillas ---
     "🏈": [
-        {"titulo": "🏈 *¡DOMINGO DE TOUCHDOWN!* 🏈", "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕒 Kickoff: *{horarios}*\n📺 Cobertura Nacional: _{canales}_", "cierre": "💪 ¡A romper las tacleadas! Mira la acción aquí:\n"},
+        {"titulo": "🏈 *¡DOMINGO DE TOUCHDOWN!* 🏈", "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕒 Kickoff: *{horarios}*\n📺 Cobertura Nacional: _{canales}_", "cierre": "💪 ¡A romper las tacleadas! Mira la acción aquí:\n", "ESPECIAL_FIN_SEMANA": True},
         {"titulo": "🚨 *ALERTA NFL / NCAA EN VIVO* 🚨", "cuerpo": "*{organizador}*\n⚔️ Enfrentamiento: *{competidores}*\n🕓 Hora CDMX: *{horarios}*\n📡 Transmisión: _{canales}_", "cierre": "📲 No te pierdas este épico duelo de emparrillado:\n"},
         {"titulo": "🔥 *MÁXIMA TENSIÓN EN EL CAMPO* 🔥", "cuerpo": "🏅 Duelo: *{competidores}*\n📍 Ubicación: {detalle_partido}\n⏰ Inicio: *{horarios}*\n🎥 Canales: _{canales}_", "cierre": "🔗 Todos los pases y jugadas en vivo:\n"},
         {"titulo": "📰 *HOY: JUEGO CLAVE DE LA SEMANA* 📰", "cuerpo": "*{organizador}* - *{competidores}*\n⏱️ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_", "cierre": "🌐 Guía completa y noticias de la liga:\n"},
         {"titulo": "🏟️ *RIVALIDAD EN EL EMPARRILLADO* 🏟️", "cuerpo": "💥 Duelo divisional: *{competidores}*\n🕒 Comienza: *{horarios}*\n📡 Cobertura: _{canales}_", "cierre": "👉 Pases, yardas y más, síguelo en vivo:\n"}
     ],
-    # --- 🏀 BALONCESTO - 5 Plantillas ---
     "🏀": [
         {"titulo": "🏀 *¡ACCIÓN EN LA CANCHA!* 🏀", "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n🕓 Hora de Salto: *{horarios}*\n📺 Canales: _{canales}_", "cierre": "⚡ ¡Máxima velocidad! Mira el partido aquí:\n"},
         {"titulo": "🔥 *SHOWTIME EN EL TABLERO* 🔥", "cuerpo": "🏅 Evento: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕒 Inicio: *{horarios}*\n🎥 Canales: _{canales}_", "cierre": "🔗 Sigue los mejores highlights:\n"},
@@ -44,7 +42,6 @@ PLANTILLAS_POR_DEPORTE = {
         {"titulo": "🎯 *DUELO DE GIGANTES EN LA PINTURA* 🎯", "cuerpo": "🏆 Partido: *{competidores}*\n🕓 Salto Inicial: *{horarios}*\n📺 Dónde Verlo: _{canales}_", "cierre": "🚀 Accede al link de transmisión:\n"},
         {"titulo": "🚨 *NOCHE DE TRIPLES Y CLAVADAS* 🚨", "cuerpo": "🏀 Enfrentamiento: *{competidores}*\n⏰ Hora de inicio: *{horarios}*\n📡 Cobertura: _{canales}_", "cierre": "👉 Toda la acción de la liga, aquí:\n"}
     ],
-    # --- ⚾ BÉISBOL - 5 Plantillas ---
     "⚾": [
         {"titulo": "⚾ *¡HOME RUN! EL JUEGO DE HOY* ⚾", "cuerpo": "🏆 Duelo: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕓 Primera Bola: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "🤩 ¡Play ball! Mira el juego completo aquí:\n"},
         {"titulo": "🔔 *RECORDATORIO MLB / LMB* 🔔", "cuerpo": "*{organizador}*\n⚔️ Encuentro: *{competidores}*\n⏰ Hora CDMX: *{horarios}*\n📡 Cobertura: _{canales}_", "cierre": "📲 Conéctate al juego y las estadísticas:\n"},
@@ -52,31 +49,19 @@ PLANTILLAS_POR_DEPORTE = {
         {"titulo": "⭐ *SERIE CLAVE DEL DÍA* ⭐", "cuerpo": "*{organizador}* - *{competidores}*\n⏱️ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_", "cierre": "🌐 Guía y resultados actualizados al instante:\n"},
         {"titulo": "🏟️ *BÉISBOL BAJO LAS LUCES* 🏟️", "cuerpo": "💥 Duelo: *{competidores}*\n⚾ Primera Bola: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "👉 Todos los partidos de la jornada aquí:\n"}
     ],
-    # --- 🥊 COMBATE - 5 Plantillas ---
     "🥊": [
-        {"titulo": "🥊 *¡NOCHE DE NOQUEOS!* 🥊", "cuerpo": "*{organizador}*\n👊 Duelo: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 PPV/Canal: _{canales}_", "cierre": "🔥 ¡Máxima adrenalina! Mira el combate aquí:\n"},
+        {"titulo": "🥊 *¡NOCHE DE NOQUEOS!* 🥊", "cuerpo": "*{organizador}*\n👊 Duelo: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 PPV/Canal: _{canales}_", "cierre": "🔥 ¡Máxima adrenalina! Mira el combate aquí:\n", "ESPECIAL_FIN_SEMANA": True},
         {"titulo": "💥 *DUELO ESTELAR DE COMBATE* 💥", "cuerpo": "*{organizador}*\n⚔️ Enfrentamiento: *{competidores}*\n📍 Lugar: {detalle_partido}\n⏰ Horario Principal: *{horarios}*\n🎥 Dónde Verlo: _{canales}_", "cierre": "🔗 Acceso directo y previa del combate:\n"},
         {"titulo": "🚨 *ALERTA UFC / BOX* 🚨", "cuerpo": "🏅 Pelea: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕓 Hora de la cartelera: *{horarios}*\n📡 Transmisión: _{canales}_", "cierre": "📲 Sigue el evento completo, round por round:\n"},
-        {"titulo": "💪 *FUERZA Y TÉCNICA EN EL RING* 💪", "cuerpo": "Un choque de estilos imperdible.\n👊 Duelo: *{competidores}*\n⏰ Inicia: *{horarios}*\n📺 Cobertura: _{canales}_", "cierre": "No te pierdas ni un solo golpe:\n"},
-        {"titulo": "🏆 *CAMPEONATO EN JUEGO* 🏆", "cuerpo": "El título está en la línea.\n🥊 Pelea Estelar: *{competidores}*\n🏟️ Arena: {detalle_partido}\n🕒 Hora: *{horarios}*\n📺 Míralo por: _{canales}_", "cierre": "¡Una noche que hará historia! Sigue la pelea:\n"}
     ],
-    # --- 🏎️ CARRERAS - 5 Plantillas ---
     "🏎️": [
-        {"titulo": "🏁 *¡ARRANCAN LOS MOTORES!* 🏎️", "cuerpo": "*{organizador}*\n🛣️ Evento: *{competidores}*\n📍 Circuito: {detalle_partido}\n⏱️ Hora de Salida: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "💨 ¡Velocidad pura! Mira la carrera aquí:\n"},
+        {"titulo": "🏁 *¡ARRANCAN LOS MOTORES!* 🏎️", "cuerpo": "*{organizador}*\n🛣️ Evento: *{competidores}*\n📍 Circuito: {detalle_partido}\n⏱️ Hora de Salida: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "💨 ¡Velocidad pura! Mira la carrera aquí:\n", "ESPECIAL_FIN_SEMANA": True},
         {"titulo": "🚦 *LUZ VERDE PARA LA ACCIÓN* 🚦", "cuerpo": "*{organizador}*\n🏆 Competencia: *{competidores}*\n🌎 Zona Horaria: *{horarios}*\n📡 Cobertura total: _{canales}_", "cierre": "➡️ Guía completa y horarios locales:\n"},
-        {"titulo": "🚨 *ATENCIÓN F1 / NASCAR* 🚨", "cuerpo": "🏅 Evento: *{competidores}*\n⏰ Horario: *{horarios}*\n🎥 Canales: _{canales}_", "cierre": "🔗 Acceso directo a la transmisión en vivo:\n"},
-        {"titulo": "🏆 *DÍA DE CAMPEONATO SOBRE RUEDAS* 🏆", "cuerpo": "La bandera a cuadros espera al ganador.\n🏎️ Carrera: *{competidores}*\n⏰ Inicio: *{horarios}*\n📺 Cobertura: _{canales}_", "cierre": "¡No te quedes atrás! Sigue la carrera:\n"},
-        {"titulo": "💨 *ALTA VELOCIDAD Y ADRENALINA* 💨", "cuerpo": "Prepárate para los rebases y la estrategia.\n🛣️ Competencia: *{competidores}*\n📍 Pista: {detalle_partido}\n🕒 Hora: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "Sigue cada vuelta en tiempo real:\n"}
     ],
-    # --- 🎾 TENIS - 5 Plantillas ---
     "🎾": [
         {"titulo": "🎾 *DUELO EN LA CANCHA CENTRAL* 🎾", "cuerpo": "*{organizador}*\n⚔️ Partido: *{competidores}*\n📍 Torneo: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "👉 Sigue el marcador en vivo, punto a punto:\n"},
         {"titulo": "🔔 *ALERTA: TENIS PROFESIONAL* 🔔", "cuerpo": "🏆 Evento: *{competidores}*\n⏰ Horario: *{horarios}*\n🎥 Dónde Verlo: _{canales}_", "cierre": "🌐 Guía y resultados actualizados del torneo:\n"},
-        {"titulo": "🏆 *PUNTO PARA CAMPEONATO* 🏆", "cuerpo": "Un partido decisivo en el torneo.\n🎾 Duelo: *{competidores}*\n⏰ Hora: *{horarios}*\n📺 Canales: _{canales}_", "cierre": "¡No te pierdas este match point! Míralo aquí:\n"},
-        {"titulo": "💥 *CHOQUE DE RAQUETAS* 💥", "cuerpo": "*{organizador}*\n🆚 Encuentro: *{competidores}*\n📍 Sede: {detalle_partido}\n🕒 Inicio: *{horarios}*\n📡 Cobertura: _{canales}_", "cierre": "Sigue toda la acción del set:\n"},
-        {"titulo": "🌍 *GRAND SLAM / MASTERS EN VIVO* 🌍", "cuerpo": "Los mejores del mundo compiten hoy.\n🎾 Partido: *{competidores}*\n⏰ Horario: *{horarios}*\n📺 Transmisión: _{canales}_", "cierre": "Vive la emoción del tenis de élite:\n"}
     ],
-    # --- ⭐ GENÉRICAS - 10 Plantillas ---
     "⭐": [
         {"titulo": "⭐ *DESTACADO DEL DÍA* ⭐", "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Canales: _{canales}_", "cierre": "➡️ ¡No te lo pierdas! Mira la acción aquí:\n"},
         {"titulo": "📰 *HOY EN EL MUNDO DEL ENTRETENIMIENTO* 📰", "cuerpo": "*{organizador}*\n🏅 Evento: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕒 Inicio: *{horarios}*\n📺 Cobertura: _{canales}_", "cierre": "🌐 Toda la programación del día:\n"},
