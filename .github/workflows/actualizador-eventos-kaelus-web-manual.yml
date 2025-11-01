@@ -1,0 +1,61 @@
+# Nombre del nuevo workflow "On-Demand"
+name: Actualizar Programacion (Manual/On-Demand)
+
+on:
+  # Se ejecuta manualmente desde la pestaña "Actions"
+  workflow_dispatch:
+  
+  # Se ejecuta cuando es llamado por un script externo (tu bot de Telegram)
+  repository_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          # Instalamos todas las dependencias necesarias para el script
+          pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
+
+      - name: Ejecutar script de actualizacion y subida
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          URL_FUENTE: ${{ secrets.URL_FUENTE }}
+          NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
+          NOMBRE_ARCHIVO_MENSAJE: ${{ secrets.NOMBRE_ARCHIVO_MENSAJE }}
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
+          FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
+        run: python actualizador_web.py
+
+      # --- Pasos de Notificación ---
+      - name: Enviar notificación de éxito a Telegram
+        # Se ejecuta solo si el paso anterior (el script) fue exitoso
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "text=✅ La actualización 'On-Demand' de la guía de eventos ha finalizado exitosamente."
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Enviar notificación de fallo a Telegram
+        # Se ejecuta solo si algún paso anterior falló
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "text=❌ ERROR: La actualización 'On-Demand' de la guía de eventos ha fallado. Revisa el log de Actions para más detalles."
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
