@@ -82,11 +82,11 @@ Consulta los horarios y canales de transmisión aquí:
 
 📱 ¿Listo para no perderte ni un segundo de acción?
 
-Dale clic al enlace y entérate de todo en segundos 👇
+Dale clic al enlace y entérate en que canales y horarios se transmitiran👇
 
 👉 https://24hometv.xyz/#horarios
 
-⭐ 24IPTV & HomeTV – Tu Mejor Elección en Entretenimiento Deportivo ⭐"""
+⭐ 24IPTV & HomeTV – Tu Mejor Elección en TV ⭐"""
     
     mensaje_html_final = f"""<!DOCTYPE html>\n<html lang="es">\n<head>\n    <meta charset="UTF-8">\n    <title>Mensaje para WhatsApp</title>\n</head>\n<body>\n    <pre>{mensaje_texto_puro}</pre>\n</body>\n</html>"""
     
