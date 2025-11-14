@@ -23,249 +23,256 @@ MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City"))
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; Script/1.0)'}
 
 
-# --- DICCIONARIO DE PLANTILLAS POR DEPORTE (SE MANTIENE IGUAL) ---
 PLANTILLAS_POR_DEPORTE = {
+    # PLANTILLAS PARA FÚTBOL / SOCCER (⚽) - 6 VARIANTES
     "⚽": [
         {
             "titulo": "⚽ *¡EL CLÁSICO DEL FIN DE SEMANA!* ⚽",
-            "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "⚡ *¡A rodar el balón!* Mira la acción aquí:\n",
+            "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "⚡ *¡Consulta los horarios y canales aquí!* 👇\n\n",
             "ESPECIAL_FIN_SEMANA": True 
         },
         {
-            "titulo": "🚨 *ALERTA DE GOLAZOS EN VIVO* 🚨",
-            "cuerpo": "*{organizador}*\n🆚 Partido: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕓 Hora CDMX/MEX: *{horarios}*\n📡 Cobertura: _{canales}_",
-            "cierre": "📲 No te quedes fuera. ¡Sintoniza ya!:\n",
+            "titulo": "⚽🚨 *ALERTA DE GOLAZOS EN VIVO* 🚨⚽",
+            "cuerpo": "*{organizador}*\n\n🆚 Partido: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕓 Hora CDMX/MEX: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "📲 No te quedes fuera. Consulta los canales de transmisión:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔥 *FIEBRE DE FÚTBOL EN VIVO* 🔥",
-            "cuerpo": "🏟️ Sede: {detalle_partido}\n🏅 Duelo Clave: *{competidores}*\n🕒 Inicio: *{horarios}*\n📺 Míralo en: _{canales}_",
-            "cierre": "👇 Todos los detalles y links:\n",
+            "titulo": "⚽🔥 *FIEBRE DE FÚTBOL EN VIVO* 🔥⚽",
+            "cuerpo": "🏟️ Sede: {detalle_partido}\n\n🏅 Duelo Clave: *{competidores}*\n\n🕒 Inicio: *{horarios}*\n\n📺 Míralo en: _{canales}_",
+            "cierre": "👇 *Consulta la guía completa de horarios*:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🏆 *JORNADA CRUCIAL* 🏆",
-            "cuerpo": "*{organizador}*\n⚔️ ¡Batalla! *{competidores}*\n⏰ Hora de inicio: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "👉 No te pierdas este partido decisivo:\n",
+            "titulo": "⚽🏆 *JORNADA CRUCIAL* 🏆⚽",
+            "cuerpo": "*{organizador}*\n\n⚔️ ¡Batalla! *{competidores}*\n\n⏰ Hora de inicio: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "👉 Consulta aquí los canales de transmisión:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🎯 *GUÍA RÁPIDA: PARTIDO DEL DÍA* 🎯",
-            "cuerpo": "⚽ *{competidores}* — Hoy\n⏱️ Horarios: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
-            "cierre": "🔗 Consulta toda la jornada aquí:\n",
+            "titulo": "⚽🎯 *GUÍA RÁPIDA: PARTIDO DEL DÍA* 🎯⚽",
+            "cuerpo": "⚽ *{competidores}* — Hoy\n\n⏱️ Horarios: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_",
+            "cierre": "🔗 Consulta *toda la jornada aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "📣 *ÚLTIMA HORA: PARTIDO ESTELAR* 📣",
-            "cuerpo": "*{organizador}*\n💥 Enfrentamiento: *{competidores}*\n⏰ Horario Principal: *{horarios}*\n📺 Cobertura: _{canales}_",
-            "cierre": "🌐 Guía completa y noticias:\n",
+            "titulo": "⚽📣 *ÚLTIMA HORA: PARTIDO ESTELAR* 📣⚽",
+            "cuerpo": "*{organizador}*\n\n💥 Enfrentamiento: *{competidores}*\n\n⏰ Horario Principal: *{horarios}*\n\n📺 Cobertura: _{canales}_",
+            "cierre": "🌐 Guía completa y noticias:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
+    # PLANTILLAS PARA FÚTBOL AMERICANO (🏈) - 6 VARIANTES
     "🏈": [
         {
             "titulo": "🏈 *¡DÍA DE TOUCHDOWN!* 🏈",
-            "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕒 Kickoff: *{horarios}*\n📺 Cobertura Nacional: _{canales}_",
-            "cierre": "💪 *¡A romper las tacleadas!* Mira la acción aquí:\n",
+            "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕒 Kickoff: *{horarios}*\n\n📺 Cobertura Nacional: _{canales}_",
+            "cierre": "💪 *Consulta los horarios y canales aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": True 
         },
         {
-            "titulo": "🚨 *ALERTA NFL / NCAA EN VIVO* 🚨",
-            "cuerpo": "*{organizador}*\n⚔️ Enfrentamiento: *{competidores}*\n🕓 Hora CDMX/MEX: *{horarios}*\n📡 Transmisión: _{canales}_",
-            "cierre": "📲 No te pierdas este épico duelo de emparrillado:\n",
+            "titulo": "🏈🚨 *ALERTA NFL / NCAA EN VIVO* 🚨🏈",
+            "cuerpo": "*{organizador}*\n\n⚔️ Enfrentamiento: *{competidores}*\n\n🕓 Hora CDMX/MEX: *{horarios}*\n\n📡 Transmisión: _{canales}_",
+            "cierre": "📲 Consulta la guía completa de horarios:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔥 *MÁXIMA TENSIÓN EN EL CAMPO* 🔥",
-            "cuerpo": "🏅 Duelo: *{competidores}*\n📍 Ubicación: {detalle_partido}\n⏰ Inicio: *{horarios}*\n🎥 Canales: _{canales}_",
-            "cierre": "🔗 Todos los pases y jugadas en vivo:\n",
+            "titulo": "🏈🔥 *MÁXIMA TENSIÓN EN EL CAMPO* 🔥🏈",
+            "cuerpo": "🏅 Duelo: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n⏰ Inicio: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "🔗 Consulta los canales de transmisión en vivo:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "📰 *HOY: JUEGO CLAVE* 📰",
-            "cuerpo": "*{organizador}* - *{competidores}*\n⏱️ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_",
-            "cierre": "🌐 Guía completa y noticias:\n",
+            "titulo": "🏈📰 *HOY: JUEGO CLAVE* 📰🏈",
+            "cuerpo": "*{organizador}* - *{competidores}*\n\n⏱️ Horario Principal: *{horarios}*\n\n📺 Múltiples Canales: _{canales}_",
+            "cierre": "🌐 Guía completa y noticias:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🏟️ *NUEVA JORNADA DE FÚTBOL AMERICANO* 🏟️",
-            "cuerpo": "*{organizador}*\n💥 Enfrentamiento: *{competidores}*\n🕒 Comienza: *{horarios}*\n📡 Cobertura: _{canales}_",
-            "cierre": "👉 Pases, yardas y más:\n",
+            "titulo": "🏈🏟️ *NUEVA JORNADA DE FÚTBOL AMERICANO* 🏟️🏈",
+            "cuerpo": "*{organizador}*\n\n💥 Enfrentamiento: *{competidores}*\n\n🕒 Comienza: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "👉 Pases, yardas y más:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🚨 *IMPERDIBLE: EL DUELO DE LA SEMANA* 🚨",
-            "cuerpo": "🏆 Partido: *{competidores}*\n📍 Desde {detalle_partido}\n⏰ Kickoff: *{horarios}*\n📺 Canales: _{canales}_",
-            "cierre": "🔗 Mira el partido en nuestra web:\n",
+            "titulo": "🏈🚨 *IMPERDIBLE: EL DUELO DE LA SEMANA* 🚨🏈",
+            "cuerpo": "🏆 Partido: *{competidores}*\n\n📍 Desde {detalle_partido}\n\n⏰ Kickoff: *{horarios}*\n\n📺 Canales: _{canales}_",
+            "cierre": "🔗 Consulta la guía completa de la semana:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
+    # PLANTILLAS PARA BÉISBOL (⚾) - 6 VARIANTES
     "⚾": [
         {
             "titulo": "⚾ *¡HOME RUN! EL PARTIDO DE HOY* ⚾",
-            "cuerpo": "🏆 Duelo: *{competidores}*\n🏟️ Estadio: {detalle_partido}\n🕓 Primera Bola: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "🤩 *¡Pásala!* Mira el partido completo aquí:\n",
+            "cuerpo": "🏆 Duelo: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕓 Primera Bola: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "🤩 *Consulta el horario y canales aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔔 *RECORDATORIO MLB* 🔔",
-            "cuerpo": "*{organizador}*\n⚔️ Encuentro: *{competidores}*\n⏰ Hora CDMX/MEX: *{horarios}*\n📡 Cobertura: _{canales}_",
-            "cierre": "📲 Conéctate al juego y las estadísticas:\n",
+            "titulo": "⚾🔔 *RECORDATORIO MLB* 🔔⚾",
+            "cuerpo": "*{organizador}*\n\n⚔️ Encuentro: *{competidores}*\n\n⏰ Hora CDMX/MEX: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "📲 Conéctate al juego y consulta las estadísticas:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔥 *NOCHE DE BATAZOS* 🔥",
-            "cuerpo": "🏅 Evento: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕒 Inicio: *{horarios}*\n🎥 Canales: _{canales}_",
-            "cierre": "🔗 Sigue todas las entradas en vivo:\n",
+            "titulo": "⚾🔥 *NOCHE DE BATAZOS* 🔥⚾",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕒 Inicio: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "🔗 Sigue todas las entradas en vivo:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "⭐ *SERIE CLAVE DEL DÍA* ⭐",
-            "cuerpo": "*{organizador}* - *{competidores}*\n⏱️ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_",
-            "cierre": "🌐 Guía y resultados actualizados:\n",
+            "titulo": "⚾⭐ *SERIE CLAVE DEL DÍA* ⭐⚾",
+            "cuerpo": "*{organizador}* - *{competidores}*\n\n⏱️ Horario Principal: *{horarios}*\n\n📺 Múltiples Canales: _{canales}_",
+            "cierre": "🌐 Guía y resultados actualizados:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🏟️ *ÚLTIMA ENTRADA: BÉISBOL* 🏟️",
-            "cuerpo": "💥 Duelo: *{competidores}*\n⚾ Primera Bola: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "👉 Todos los partidos de la jornada:\n",
+            "titulo": "⚾🏟️ *ÚLTIMA ENTRADA: BÉISBOL* 🏟️⚾",
+            "cuerpo": "💥 Duelo: *{competidores}*\n\n⚾ Primera Bola: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "👉 Todos los partidos de la jornada:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🎯 *GUÍA RÁPIDA: PARTIDO MLB/LMP* 🎯",
-            "cuerpo": "*{organizador}*\n⚾ Enfrentamiento: *{competidores}*\n⏰ Hora de inicio: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
-            "cierre": "🔗 Revisa nuestra guía completa:\n",
+            "titulo": "⚾🎯 *GUÍA RÁPIDA: PARTIDO MLB/LMP* 🎯⚾",
+            "cuerpo": "*{organizador}*\n\n⚾ Enfrentamiento: *{competidores}*\n\n⏰ Hora de inicio: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_",
+            "cierre": "🔗 Revisa nuestra guía completa:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
+    # PLANTILLAS PARA BALONCESTO (🏀) - 6 VARIANTES
     "🏀": [
         {
             "titulo": "🏀 *¡ACCIÓN EN LA CANCHA!* 🏀",
-            "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n🕓 Hora de Salto: *{horarios}*\n📺 Canales: _{canales}_",
-            "cierre": "⚡ *¡Máxima velocidad!* Mira el partido aquí:\n",
+            "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n🕓 Hora de Salto: *{horarios}*\n\n📺 Canales: _{canales}_",
+            "cierre": "⚡ *Consulta los horarios y canales aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🚨 *ALERTA NBA* 🚨",
-            "cuerpo": "*{organizador}*\n⚔️ Duelo: *{competidores}*\n⏰ Horario: *{horarios}*\n📡 Cobertura: _{canales}_",
-            "cierre": "📲 No te pierdas este épico tiro de tres:\n",
+            "titulo": "🏀🚨 *ALERTA NBA* 🚨🏀",
+            "cuerpo": "*{organizador}*\n\n⚔️ Duelo: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "📲 Consulta la guía completa de horarios:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔥 *SHOWTIME EN EL TABLERO* 🔥",
-            "cuerpo": "🏅 Evento: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕒 Inicio: *{horarios}*\n🎥 Canales: _{canales}_",
-            "cierre": "🔗 Sigue los mejores highlights:\n",
+            "titulo": "🏀🔥 *SHOWTIME EN EL TABLERO* 🔥🏀",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕒 Inicio: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "🔗 Consulta los canales de transmisión:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "⭐ *PARTIDO DESTACADO* ⭐",
-            "cuerpo": "*{organizador}* - *{competidores}*\n⏱️ Horario Principal: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "🌐 Guía completa de la jornada de baloncesto:\n",
+            "titulo": "🏀⭐ *PARTIDO DESTACADO* ⭐🏀",
+            "cuerpo": "*{organizador}* - *{competidores}*\n\n⏱️ Horario Principal: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "🌐 Guía completa de la jornada de baloncesto:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🎯 *DUELO DE GIGANTES* 🎯",
-            "cuerpo": "🏆 Partido: *{competidores}*\n🕓 Salto Inicial: *{horarios}*\n📺 Dónde Verlo: _{canales}_",
-            "cierre": "🚀 Accede al link de transmisión:\n",
+            "titulo": "🏀🎯 *DUELO DE GIGANTES* 🎯🏀",
+            "cuerpo": "🏆 Partido: *{competidores}*\n\n🕓 Salto Inicial: *{horarios}*\n\n📺 Dónde Verlo: _{canales}_",
+            "cierre": "🚀 Consulta la guía de transmisión:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "📰 *HOY EN EL BALONCESTO* 📰",
-            "cuerpo": "*{organizador}*\n🏀 Enfrentamiento: *{competidores}*\n⏰ Hora de inicio: *{horarios}*\n📡 Cobertura: _{canales}_",
-            "cierre": "👉 Toda la acción de la liga:\n",
+            "titulo": "🏀📰 *HOY EN EL BALONCESTO* 📰🏀",
+            "cuerpo": "*{organizador}*\n\n🏀 Enfrentamiento: *{competidores}*\n\n⏰ Hora de inicio: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "👉 Toda la acción de la liga:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
+    # PLANTILLAS PARA COMBATE (🥊) - 3 VARIANTES
     "🥊": [
         {
             "titulo": "🥊 *¡NOCHE DE NOQUEOS!* 🥊",
-            "cuerpo": "*{organizador}*\n👊 Duelo: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 PPV/Canal: _{canales}_",
-            "cierre": "🔥 *¡Máxima adrenalina!* Mira el combate aquí:\n",
+            "cuerpo": "*{organizador}*\n\n👊 Duelo: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n⏱️ Comienza: *{horarios}*\n\n📺 PPV/Canal: _{canales}_",
+            "cierre": "🔥 *Consulta la cartelera y canales aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": True
         },
         {
-            "titulo": "💥 *DUELO ESTELAR DE COMBATE* 💥",
-            "cuerpo": "*{organizador}*\n⚔️ Enfrentamiento: *{competidores}*\n📍 Lugar: {detalle_partido}\n⏰ Horario Principal: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
-            "cierre": "🔗 Acceso directo y previa:\n",
+            "titulo": "🥊💥 *DUELO ESTELAR DE COMBATE* 💥🥊",
+            "cuerpo": "*{organizador}*\n\n⚔️ Enfrentamiento: *{competidores}*\n\n📍 Lugar: {detalle_partido}\n\n⏰ Horario Principal: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_",
+            "cierre": "🔗 Acceso directo y previa:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🚨 *ALERTA UFC / BOX* 🚨",
-            "cuerpo": "🏅 Pelea: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕓 Hora de la cartelera: *{horarios}*\n📡 Transmisión: _{canales}_",
-            "cierre": "📲 Sigue el evento completo:\n",
+            "titulo": "🥊🚨 *ALERTA UFC / BOX* 🚨🥊",
+            "cuerpo": "🏅 Pelea: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕓 Hora de la cartelera: *{horarios}*\n\n📡 Transmisión: _{canales}_",
+            "cierre": "📲 Sigue el evento completo:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
+    # PLANTILLAS PARA CARRERAS / AUTOMOVILISMO (🏎️) - 3 VARIANTES
     "🏎️": [
         {
             "titulo": "🏁 *¡ARRANCAN LOS MOTORES!* 🏎️",
-            "cuerpo": "*{organizador}*\n🛣️ Evento: *{competidores}*\n📍 Circuito: {detalle_partido}\n⏱️ Hora de Salida: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "💨 ¡Velocidad pura! Mira la carrera aquí:\n",
+            "cuerpo": "*{organizador}*\n\n🛣️ Evento: *{competidores}*\n\n📍 Circuito: {detalle_partido}\n\n⏱️ Hora de Salida: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "💨 *Consulta la transmisión y horarios aquí*:\n\n",
             "ESPECIAL_FIN_SEMANA": True
         },
         {
-            "titulo": "🚦 *LUZ VERDE PARA LA ACCIÓN* 🚦",
-            "cuerpo": "*{organizador}*\n🏆 Competencia: *{competidores}*\n🌎 Zona Horaria: *{horarios}*\n📡 Cobertura total: _{canales}_",
-            "cierre": "➡️ Guía completa y horarios locales:\n",
+            "titulo": "🏎️🚦 *LUZ VERDE PARA LA ACCIÓN* 🚦🏎️",
+            "cuerpo": "*{organizador}*\n\n🏆 Competencia: *{competidores}*\n\n🌎 Zona Horaria: *{horarios}*\n\n📡 Cobertura total: _{canales}_",
+            "cierre": "➡️ Guía completa y horarios locales:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🚨 *ATENCIÓN FÓRMULA 1 / NASCAR* 🚨",
-            "cuerpo": "🏅 Evento: *{competidores}*\n⏰ Horario: *{horarios}*\n🎥 Canales: _{canales}_",
-            "cierre": "🔗 Acceso directo a la transmisión:\n",
+            "titulo": "🏎️🚨 *ATENCIÓN FÓRMULA 1 / NASCAR* 🚨🏎️",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "🔗 Acceso directo a la transmisión:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
     ],
+    # PLANTILLAS PARA TENIS (🎾) - 2 VARIANTES
     "🎾": [
         {
             "titulo": "🎾 *DUELO EN LA CANCHA CENTRAL* 🎾",
-            "cuerpo": "*{organizador}*\n⚔️ Partido: *{competidores}*\n📍 Torneo: {detalle_partido}\n⏱️ Comienza: *{horarios}*\n📺 Transmisión: _{canales}_",
-            "cierre": "👉 Sigue el marcador en vivo:\n",
+            "cuerpo": "*{organizador}*\n\n⚔️ Partido: *{competidores}*\n\n📍 Torneo: {detalle_partido}\n\n⏱️ Comienza: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "👉 Sigue el marcador en vivo:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
-            "titulo": "🔔 *ALERTA: TENIS PROFESIONAL* 🔔",
-            "cuerpo": "🏆 Evento: *{competidores}*\n⏰ Horario: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
-            "cierre": "🌐 Guía y resultados actualizados:\n",
+            "titulo": "🎾🔔 *ALERTA: TENIS PROFESIONAL* 🔔🎾",
+            "cuerpo": "🏆 Evento: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_",
+            "cierre": "🌐 Guía y resultados actualizados:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
     ],
+    # PLANTILLAS GENÉRICAS (⭐) - 6 VARIANTES
     "⭐": [
         {
             "titulo": "⭐ *DESTACADO DEL DÍA* ⭐",
-            "cuerpo": "🏆 Encuentro: *{competidores}*\n🏟️ Sede: {detalle_partido}\n⏰ Horario: *{horarios}*\n📺 Canales: _{canales}_",
-            "cierre": "➡️ ¡No te lo pierdas! Mira la acción aquí:\n",
+            "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Canales: _{canales}_",
+            "cierre": "➡️ ¡Consulta los canales y horarios aquí!:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
             "titulo": "📰 *HOY EN EL DEPORTE* 📰",
-            "cuerpo": "*{organizador}*\n🏅 Evento: *{competidores}*\n📍 Ubicación: {detalle_partido}\n🕒 Inicio: *{horarios}*\n📺 Cobertura: _{canales}_",
-            "cierre": "🌐 Toda la programación:\n",
+            "cuerpo": "*{organizador}*\n\n🏅 Evento: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕒 Inicio: *{horarios}*\n\n📺 Cobertura: _{canales}_",
+            "cierre": "🌐 Toda la programación:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
             "titulo": "🔔 *RECORDATORIO DE EVENTO* 🔔",
-            "cuerpo": "*{organizador}*\n⏱️ Horarios: *{horarios}*\n🎥 Dónde Verlo: _{canales}_",
-            "cierre": "🔗 Todos los detalles en nuestra web:\n",
+            "cuerpo": "*{organizador}*\n\n⏱️ Horarios: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_",
+            "cierre": "🔗 Todos los detalles en nuestra web:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
             "titulo": "🔥 *EVENTO EN VIVO* 🔥",
-            "cuerpo": "🏆 Competencia: *{competidores}*\n⌚ ¡Prepara el reloj! *{horarios}*\n📡 Transmisión: _{canales}_",
-            "cierre": "📲 ¡Sintoniza ya!:\n",
+            "cuerpo": "🏆 Competencia: *{competidores}*\n\n⌚ ¡Prepara el reloj! *{horarios}*\n\n📡 Transmisión: _{canales}_",
+            "cierre": "📲 ¡Sintoniza ya!:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
             "titulo": "📺 *GUÍA RÁPIDA DE TRANSMISIÓN* 📺",
-            "cuerpo": "*{organizador}* - *{competidores}*\n🕐 Horario: *{horarios}*\n🥇 Canales destacados: _{canales}_",
-            "cierre": "👇 Haz click para ver la guía completa:\n",
+            "cuerpo": "*{organizador}* - *{competidores}*\n\n🕐 Horario: *{horarios}*\n\n🥇 Canales destacados: _{canales}_",
+            "cierre": "👇 Haz click para ver la guía completa:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         },
         {
             "titulo": "🎯 *PROGRAMACIÓN ESPECIAL* 🎯",
-            "cuerpo": "🏅 Duelo: *{competidores}*\n⏰ Horario Principal: *{horarios}*\n📺 Múltiples Canales: _{canales}_",
-            "cierre": "🔗 Acceso directo y horarios locales:\n",
+            "cuerpo": "🏅 Duelo: *{competidores}*\n\n⏰ Horario Principal: *{horarios}*\n\n📺 Múltiples Canales: _{canales}_",
+            "cierre": "🔗 Acceso directo y horarios locales:\n\n",
             "ESPECIAL_FIN_SEMANA": False
         }
     ]
