@@ -40,7 +40,7 @@ jobs:
         run: |
           MENSAJE="✅ **ÉXITO:** El script a Finalizado correctamente.%0A"
           MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A"
-          MENSAJE="${MENSAJE}%0ALa guía de eventos deportivos del día de hoy en la pagina web 24hometv.xyz ha concluido exitosamente. 👍"
+          MENSAJE="${MENSAJE}%0ALa guía de eventos deportivos del día de hoy en la pagina web 24hometv.xyz ha concluido exitosamente. 👍🏼"
           
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
