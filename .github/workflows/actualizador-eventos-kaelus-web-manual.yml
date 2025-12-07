@@ -38,7 +38,7 @@ jobs:
       - name: Enviar notificación de éxito a Telegram
         if: success()
         run: |
-          MENSAJE="✅ **ÉXITO:** Actualización 'On-Demand' de eventos finalizada."
+          MENSAJE="✅ **ÉXITO:** Actualizador de programacion de eventos desde Kaelus desde Telegram finalizada."
           MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
           MENSAJE="${MENSAJE}%0ALa guía de eventos deportivos del día de hoy en la pagina web ha concluido exitosamente."
           
@@ -54,7 +54,7 @@ jobs:
       - name: Enviar notificación de fallo a Telegram
         if: failure()
         run: |
-          MENSAJE="❌ **FALLO CRÍTICO:** La actualización 'On-Demand' de la guía de eventos ha fallado."
+          MENSAJE="❌ **FALLO CRÍTICO:** La actualización de la guía de eventos desde Kaelus ha fallado."
           MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
           MENSAJE="${MENSAJE}%0A**Revisión:** Revise el log de Actions para más detalles."
           
