@@ -1,6 +1,6 @@
 # === CÓDIGO ACTUALIZADO para actualizador.yml ===
 
-name: Actualizador de eventos deportivos pagina web automatico
+name: Actualizador de programación automatico
 
 on:
   schedule:
