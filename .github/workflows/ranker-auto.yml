@@ -1,4 +1,4 @@
-name: Ranking de Eventos Relevantes con IA
+name: Ranqueo Auto 3 eventos con Gemini 
 
 on:
   schedule:
