@@ -38,8 +38,8 @@ jobs:
       - name: Enviar notificación de éxito a Telegram
         if: success()
         run: |
-          MENSAJE="✅ **ÉXITO:** Actualizador de programacion de eventos desde Kaelus desde Telegram finalizada."
-          MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
+          MENSAJE="✅ **ÉXITO:** El script a Finalizado correctamente.%0A%0A"
+          MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A%0A"
           MENSAJE="${MENSAJE}%0ALa guía de eventos deportivos del día de hoy en la pagina web ha concluido exitosamente."
           
           curl -s -X POST \
