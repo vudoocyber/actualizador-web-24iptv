@@ -1,4 +1,4 @@
-name: Envio Automatico a Telegram
+name: Envio Automatico de programacion a Telegram
 
 on:
   schedule:
