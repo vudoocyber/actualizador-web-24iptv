@@ -1,4 +1,4 @@
-name: Envio Automatico Eventos Rankeados
+name: Envio Automatico eventos Rankeados a telegram
 
 on:
   schedule:
