@@ -1,0 +1,64 @@
+name: Ranqueo Manual 3 eventos con Gemini
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+
+jobs:
+  run-ranking:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          # Aseguramos la instalación de Cohere y Gemini/Google, además de las utilidades
+          pip install --upgrade requests beautifulsoup4 google-generativeai pytz cohere packaging
+
+      - name: Ejecutar script de ranking y subida
+        run: python ranker_gemini.py
+        env:
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
+          FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
+
+      # ----------------------------------------------------------------------
+      # ✅ NOTIFICACIÓN DE ÉXITO (Para Telegram)
+      # ----------------------------------------------------------------------
+      - name: Enviar notificación de éxito a Telegram
+        if: success()
+        run: |
+          MENSAJE="✅ **ÉXITO:** El script de Ranqueo (Manual) ha Finalizado correctamente.%0A"
+          MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A"
+          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes han sido ranqueados y publicados en la web. 👍"
+          
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
+            -d "text=$MENSAJE" \
+            -d "parse_mode=Markdown"
+
+      # ----------------------------------------------------------------------
+      # ❌ NOTIFICACIÓN DE FALLO (Para Telegram)
+      # ----------------------------------------------------------------------
+      - name: Enviar notificación de fallo a Telegram
+        if: failure()
+        run: |
+          MENSAJE="❌ **FALLO CRÍTICO:** El Ranqueo manual de eventos ha fallado."
+          MENSAJE="${MENSAJE}%0A%0A**Workflow:** ${{ github.workflow }}"
+          MENSAJE="${MENSAJE}%0A%0A**Revisión:** Revise el log de Actions Github para más detalles.🧐"
+          
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
+            -d "text=$MENSAJE" \
+            -d "parse_mode=Markdown"
