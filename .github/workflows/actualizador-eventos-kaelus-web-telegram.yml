@@ -55,8 +55,8 @@ jobs:
         if: failure()
         run: |
           MENSAJE="❌ **FALLO CRÍTICO:** La actualización de la guía de eventos desde Kaelus ha fallado."
-          MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
-          MENSAJE="${MENSAJE}%0A**Revisión:** Revise el log de Actions para más detalles."
+          MENSAJE="${MENSAJE}%0A%0A**Workflow:** ${{ github.workflow }}"
+          MENSAJE="${MENSAJE}%0A%0A**Revisión:** Revise el log de Actions Github para más detalles.🧐"
           
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
