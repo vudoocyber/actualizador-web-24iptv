@@ -1,4 +1,4 @@
-name: Actualizar Programacion (Manual/On-Demand)
+name: Actualizador de Programacion desde Telegram
 
 on:
   workflow_dispatch:
@@ -32,22 +32,34 @@ jobs:
           FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
         run: python actualizador_web.py
 
+      # ----------------------------------------------------------------------
+      # ✅ NOTIFICACIÓN DE ÉXITO (Mantiene la lógica de negritas y el nombre del archivo)
+      # ----------------------------------------------------------------------
       - name: Enviar notificación de éxito a Telegram
         if: success()
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
-          -d "text=✅ La actualización de la guía de eventos deportivos del día de hoy en la pagina web 24hometv ha concluido exitosamente."
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_PERSONAL_CHAT_ID: ${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}
+          MENSAJE="✅ **ÉXITO:** Actualización 'On-Demand' de eventos finalizada."
+          MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
+          MENSAJE="${MENSAJE}%0ALa guía de eventos deportivos del día de hoy en la pagina web ha concluido exitosamente."
+          
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
+            -d "text=$MENSAJE" \
+            -d "parse_mode=Markdown"
 
+      # ----------------------------------------------------------------------
+      # ❌ NOTIFICACIÓN DE FALLO (Mantiene la lógica de negritas y el nombre del archivo)
+      # ----------------------------------------------------------------------
       - name: Enviar notificación de fallo a Telegram
         if: failure()
         run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
-          -d "text=❌ ERROR: La actualización 'On-Demand' de la guía de eventos ha fallado. Revisa el log de Actions para más detalles."
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_PERSONAL_CHAT_ID: ${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}
+          MENSAJE="❌ **FALLO CRÍTICO:** La actualización 'On-Demand' de la guía de eventos ha fallado."
+          MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
+          MENSAJE="${MENSAJE}%0A**Revisión:** Revise el log de Actions para más detalles."
+          
+          curl -s -X POST \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_PERSONAL_CHAT_ID }}" \
+            -d "text=$MENSAJE" \
+            -d "parse_mode=Markdown"
