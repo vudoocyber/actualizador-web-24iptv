@@ -36,9 +36,9 @@ jobs:
     - name: Notificar Éxito a Telegram Personal
       if: success()
       run: |
-        MENSAJE="✅ **ÉXITO:** El envío completo de la programación (Manual) ha finalizado."
+        MENSAJE="✅ **ÉXITO:** El envío de la programación diara por Telegram ha finalizado."
         MENSAJE="${MENSAJE}%0A**Workflow:** ${{ github.workflow }}"
-        MENSAJE="${MENSAJE}%0AEl mensaje fue enviado correctamente al canal de destino. 👍"
+        MENSAJE="${MENSAJE}%0AEl mensaje fue enviado correctamente al canal de Telegram. 👍"
         
         curl -s -X POST \
           "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
