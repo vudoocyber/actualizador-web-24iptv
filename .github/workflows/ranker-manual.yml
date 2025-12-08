@@ -37,9 +37,9 @@ jobs:
       - name: Enviar notificación de éxito a Telegram
         if: success()
         run: |
-          MENSAJE="✅ **ÉXITO:** El script de Ranqueo (Manual) ha Finalizado correctamente.%0A"
+          MENSAJE="✅ **ÉXITO:** El script de para encontrar los 3 eventos mas importandes se esta ejecutando correctamente.%0A"
           MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A"
-          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes han sido ranqueados y publicados en la web. 👍🏼"
+          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes han sido ranqueados y publicados en la pagina web. 👍🏼"
           
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
