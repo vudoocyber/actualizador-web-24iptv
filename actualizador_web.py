@@ -5,7 +5,6 @@ import os
 from ftplib import FTP
 from datetime import datetime
 import json
-import google.generativeai as genai
 
 # --- 1. CONFIGURACIÓN ---
 URL_FUENTE = os.getenv('URL_FUENTE')
@@ -18,7 +17,6 @@ NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programa
 NOMBRE_ARCHIVO_MENSAJE = os.getenv('NOMBRE_ARCHIVO_MENSAJE', 'mensaje_whatsapp.html')
 NOMBRE_ARCHIVO_SITEMAP = 'sitemap.xml'
 NOMBRE_ARCHIVO_TELEGRAM = 'telegram_message.txt'
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 # --- 2. FUNCIÓN PARA GENERAR EL HTML DE LA PÁGINA ---
 def aplicar_reglas_html(texto_crudo):
@@ -103,9 +101,9 @@ def generar_archivo_telegram_txt(mensaje_texto_puro):
         raise 
     return NOMBRE_ARCHIVO_TELEGRAM
 
-# --- 5. FUNCIÓN SIMULADA (NO USA IA) ---
+# --- 5. FUNCIÓN SIMULADA (RANKING VACÍO) ---
 def obtener_ranking_eventos(texto_crudo):
-    print("ADVERTENCIA: La funcionalidad de ranking con IA está desactivada en este script.")
+    # La lógica de ranking ahora se maneja en un script separado (ranker.yml / ranker_gemini.py)
     return []
 
 # --- 6. FUNCIÓN JSON (CON NUEVA ETIQUETA `fecha_guia`) ---
