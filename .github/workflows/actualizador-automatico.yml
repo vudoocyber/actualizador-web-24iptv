@@ -1,5 +1,3 @@
-# === CÓDIGO ACTUALIZADO para actualizador.yml ===
-
 name: Actualizador de programación automatico
 
 on:
@@ -22,13 +20,64 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # --- LÍNEA CORREGIDA ---
-          # Añadimos 'pytz' y 'packaging' que son requeridas por las librerías.
           pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
 
+      # --- NUEVO PASO: Verificación de Fecha ---
+      - name: Verificar si la guia ya esta actualizada
+        id: check_date
+        run: |
+          python -c "
+          import requests
+          import datetime
+          import pytz
+          import os
+          
+          try:
+              # URL de tu archivo JSON en producción
+              url = 'https://24hometv.xyz/events.json'
+              
+              # Agregamos un parametro de tiempo para evitar caché
+              print(f'Consultando: {url}')
+              response = requests.get(url, params={'nocache': datetime.datetime.now().timestamp()}, timeout=10)
+              
+              should_run = 'true'
+              
+              if response.status_code == 200:
+                  data = response.json()
+                  fecha_guia = data.get('fecha_guia')
+                  
+                  # Obtener fecha actual en México
+                  tz = pytz.timezone('America/Mexico_City')
+                  fecha_hoy = datetime.datetime.now(tz).strftime('%Y-%m-%d')
+                  
+                  print(f'Fecha en la Guía (Web): {fecha_guia}')
+                  print(f'Fecha de Hoy (México): {fecha_hoy}')
+                  
+                  if fecha_guia == fecha_hoy:
+                      print('✅ La guía YA corresponde al día de hoy. Se omitirá la actualización para proteger cambios manuales.')
+                      should_run = 'false'
+                  else:
+                      print('⚠️ La guía está desactualizada (fecha distinta). Se procederá a actualizar.')
+                      should_run = 'true'
+              else:
+                  print(f'⚠️ No se pudo leer el JSON (Status {response.status_code}). Se forzará la actualización.')
+                  should_run = 'true'
+
+              # Escribir la variable de salida para el siguiente paso
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                  print(f'should_run={should_run}', file=fh)
+          
+          except Exception as e:
+              print(f'❌ Error en la verificación: {e}. Por seguridad, se ejecutará la actualización.')
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                  print('should_run=true', file=fh)
+          "
+
       - name: Ejecutar script de actualizacion y subida
+        # --- CONDICIONAL AGREGADA ---
+        # Este paso solo corre si el paso anterior (check_date) dice que es necesario ('true')
+        if: steps.check_date.outputs.should_run == 'true'
         env:
-          # Pasamos la nueva clave API junto con las demás
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           URL_FUENTE: ${{ secrets.URL_FUENTE }}
           NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
