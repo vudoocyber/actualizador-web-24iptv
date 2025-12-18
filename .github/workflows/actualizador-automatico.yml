@@ -22,7 +22,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
 
-      # --- NUEVO PASO: Verificación de Fecha ---
+      # --- PASO CORREGIDO CON HEADERS (USER-AGENT) ---
       - name: Verificar si la guia ya esta actualizada
         id: check_date
         run: |
@@ -33,12 +33,17 @@ jobs:
           import os
           
           try:
-              # URL de tu archivo JSON en producción
               url = 'https://24hometv.xyz/events.json'
               
-              # Agregamos un parametro de tiempo para evitar caché
+              # DEFINIMOS HEADERS PARA PARECER UN NAVEGADOR REAL
+              headers = {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': 'application/json'
+              }
+              
               print(f'Consultando: {url}')
-              response = requests.get(url, params={'nocache': datetime.datetime.now().timestamp()}, timeout=10)
+              # Agregamos headers a la petición
+              response = requests.get(url, headers=headers, params={'nocache': datetime.datetime.now().timestamp()}, timeout=10)
               
               should_run = 'true'
               
@@ -46,7 +51,6 @@ jobs:
                   data = response.json()
                   fecha_guia = data.get('fecha_guia')
                   
-                  # Obtener fecha actual en México
                   tz = pytz.timezone('America/Mexico_City')
                   fecha_hoy = datetime.datetime.now(tz).strftime('%Y-%m-%d')
                   
@@ -60,10 +64,10 @@ jobs:
                       print('⚠️ La guía está desactualizada (fecha distinta). Se procederá a actualizar.')
                       should_run = 'true'
               else:
-                  print(f'⚠️ No se pudo leer el JSON (Status {response.status_code}). Se forzará la actualización.')
+                  # Si falla por 403 u otro error, mostramos el motivo pero forzamos la actualización
+                  print(f'⚠️ No se pudo leer el JSON (Status {response.status_code}). Respuesta: {response.text[:100]}. Se forzará la actualización.')
                   should_run = 'true'
 
-              # Escribir la variable de salida para el siguiente paso
               with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
                   print(f'should_run={should_run}', file=fh)
           
@@ -74,8 +78,6 @@ jobs:
           "
 
       - name: Ejecutar script de actualizacion y subida
-        # --- CONDICIONAL AGREGADA ---
-        # Este paso solo corre si el paso anterior (check_date) dice que es necesario ('true')
         if: steps.check_date.outputs.should_run == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
