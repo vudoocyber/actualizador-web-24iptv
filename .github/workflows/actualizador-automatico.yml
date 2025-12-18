@@ -20,9 +20,10 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
+          # Eliminamos google-generativeai para ahorrar peso y tiempo
+          pip install --upgrade requests beautifulsoup4 pytz packaging
 
-      # --- PASO CORREGIDO CON HEADERS (USER-AGENT) ---
+      # --- Verificación de fecha con Headers (Protección contra 403 y Sobreescritura) ---
       - name: Verificar si la guia ya esta actualizada
         id: check_date
         run: |
@@ -35,14 +36,12 @@ jobs:
           try:
               url = 'https://24hometv.xyz/events.json'
               
-              # DEFINIMOS HEADERS PARA PARECER UN NAVEGADOR REAL
               headers = {
                   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                   'Accept': 'application/json'
               }
               
               print(f'Consultando: {url}')
-              # Agregamos headers a la petición
               response = requests.get(url, headers=headers, params={'nocache': datetime.datetime.now().timestamp()}, timeout=10)
               
               should_run = 'true'
@@ -64,8 +63,7 @@ jobs:
                       print('⚠️ La guía está desactualizada (fecha distinta). Se procederá a actualizar.')
                       should_run = 'true'
               else:
-                  # Si falla por 403 u otro error, mostramos el motivo pero forzamos la actualización
-                  print(f'⚠️ No se pudo leer el JSON (Status {response.status_code}). Respuesta: {response.text[:100]}. Se forzará la actualización.')
+                  print(f'⚠️ No se pudo leer el JSON (Status {response.status_code}). Se forzará la actualización.')
                   should_run = 'true'
 
               with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
@@ -80,7 +78,7 @@ jobs:
       - name: Ejecutar script de actualizacion y subida
         if: steps.check_date.outputs.should_run == 'true'
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Ya no enviamos la clave API de Gemini aquí
           URL_FUENTE: ${{ secrets.URL_FUENTE }}
           NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
           NOMBRE_ARCHIVO_MENSAJE: ${{ secrets.NOMBRE_ARCHIVO_MENSAJE }}
