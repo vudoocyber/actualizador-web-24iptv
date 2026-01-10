@@ -5,7 +5,9 @@ from ftplib import FTP
 from datetime import datetime, timezone, timedelta
 import pytz
 import re
-import google.generativeai as genai
+# --- CAMBIO 1: Nueva forma de importar la librería ---
+from google import genai
+from google.genai import types
 
 # --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
@@ -25,8 +27,8 @@ def obtener_ranking_eventos(lista_eventos):
 
     print("Contactando a la IA de Gemini para obtener top 5...")
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # --- CAMBIO 2: Inicialización del Cliente ---
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
         cst_offset = timezone(timedelta(hours=-6))
         hora_actual_cst = datetime.now(cst_offset)
@@ -60,11 +62,24 @@ def obtener_ranking_eventos(lista_eventos):
         {lista_texto_plano}
         """
 
-        response = model.generate_content(prompt, request_options={'timeout': 120})
-        ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
+        # --- CAMBIO 3: Llamada al modelo con la nueva librería ---
+        # Usamos gemini-2.0-flash por ser el estándar actual recomendado
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2 # Mantenemos baja temperatura para precisión
+            )
+        )
         
-        print(f"Ranking de Gemini (Top 5 crudo) recibido: {ranking_limpio}")
-        return ranking_limpio
+        # Procesamiento de la respuesta
+        if response.text:
+            ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
+            print(f"Ranking de Gemini (Top 5 crudo) recibido: {ranking_limpio}")
+            return ranking_limpio
+        else:
+            print("Gemini devolvió una respuesta vacía.")
+            return []
 
     except Exception as e:
         print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
@@ -78,7 +93,9 @@ def main():
     
     try:
         print(f"1. Descargando {URL_JSON_FUENTE}...")
-        respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
+        # Header user-agent para evitar bloqueo 403 (Buena práctica añadida)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        respuesta = requests.get(URL_JSON_FUENTE, headers=headers, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
         
@@ -119,7 +136,8 @@ def main():
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
                     descripcion_corta = partido.get("descripcion", "")
-                    if descripcion_corta and descripcion_corta in desc_relevante and descripcion_corta not in descripciones_rankeadas_unicas:
+                    # Búsqueda un poco más flexible para asegurar coincidencia
+                    if descripcion_corta and (descripcion_corta in desc_relevante or desc_relevante in descripcion_corta) and descripcion_corta not in descripciones_rankeadas_unicas:
                         eventos_rankeados_completos.append((evento, partido))
                         descripciones_rankeadas_unicas.add(descripcion_corta)
                         encontrado = True
@@ -141,12 +159,13 @@ def main():
                 }
                 eventos_relevantes.append(evento_relevante)
         
+        # Log más limpio de los resultados
         print(f"Ranking final después de aplicar filtros: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes]}")
     
-    # --- CONSTRUCCIÓN DEL JSON DE SALIDA (AÑADIENDO fecha_guia) ---
+    # --- CONSTRUCCIÓN DEL JSON DE SALIDA ---
     json_salida = {
         "fecha_actualizacion": fecha_actualizacion_iso,
-        "fecha_guia": fecha_guia_str, # AÑADIMOS LA FECHA DE LA GUÍA
+        "fecha_guia": fecha_guia_str,
         "eventos_relevantes": eventos_relevantes
     }
 
