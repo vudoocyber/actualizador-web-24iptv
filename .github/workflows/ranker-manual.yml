@@ -19,8 +19,8 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # Aseguramos la instalación de Cohere y Gemini/Google, además de las utilidades
-          pip install --upgrade requests beautifulsoup4 google-generativeai pytz cohere packaging
+          # ACTUALIZADO: Cambiamos google-generativeai por google-genai para coincidir con el script
+          pip install --upgrade requests beautifulsoup4 google-genai pytz cohere packaging
 
       - name: Ejecutar script de ranking y subida
         run: python ranker_gemini.py
