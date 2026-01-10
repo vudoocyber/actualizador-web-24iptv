@@ -20,8 +20,8 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # Añadimos la librería 'cohere' a la instalación
-          pip install --upgrade requests beautifulsoup4 google-generativeai pytz cohere
+          # CAMBIO REALIZADO: Se reemplazó 'google-generativeai' por 'google-genai'
+          pip install --upgrade requests beautifulsoup4 google-genai pytz cohere packaging
 
       - name: Ejecutar script de ranking y subida
         env:
