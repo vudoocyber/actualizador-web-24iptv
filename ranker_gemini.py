@@ -185,31 +185,33 @@ def main():
         "eventos_relevantes": eventos_legacy
     }
 
-    # B. Archivo Roku (Top 6, SIN Emojis) -- COMENTADO TEMPORALMENTE
-    # eventos_roku_limpios = []
-    # for evento in eventos_relevantes_maestra:
-    #     partido_orig = evento["partidos"][0]
-    #     evt_principal_clean = limpiar_texto_roku(evento["evento_principal"])
-    #     det_evento_clean = limpiar_texto_roku(evento["detalle_evento"])
-    #     partido_clean = {
-    #         "detalle_partido": limpiar_texto_roku(partido_orig.get("detalle_partido", "")),
-    #         "descripcion": limpiar_texto_roku(partido_orig.get("descripcion", "")),
-    #         "horarios": limpiar_texto_roku(partido_orig.get("horarios", "")),
-    #         "canales": [limpiar_texto_roku(c) for c in partido_orig.get("canales", [])],
-    #         "competidores": [limpiar_texto_roku(c) for c in partido_orig.get("competidores", [])]
-    #     }
-    #     evento_nuevo = {
-    #         "evento_principal": evt_principal_clean,
-    #         "detalle_evento": det_evento_clean,
-    #         "partidos": [partido_clean]
-    #     }
-    #     eventos_roku_limpios.append(evento_nuevo)
+    # B. Archivo Roku (Top 6, SIN Emojis)
+    eventos_roku_limpios = []
+    for evento in eventos_relevantes_maestra:
+        partido_orig = evento["partidos"][0]
+        evt_principal_clean = limpiar_texto_roku(evento["evento_principal"])
+        det_evento_clean = limpiar_texto_roku(evento["detalle_evento"])
+        
+        partido_clean = {
+            "detalle_partido": limpiar_texto_roku(partido_orig.get("detalle_partido", "")),
+            "descripcion": limpiar_texto_roku(partido_orig.get("descripcion", "")),
+            "horarios": limpiar_texto_roku(partido_orig.get("horarios", "")),
+            "canales": [limpiar_texto_roku(c) for c in partido_orig.get("canales", [])],
+            "competidores": [limpiar_texto_roku(c) for c in partido_orig.get("competidores", [])]
+        }
+        
+        evento_nuevo = {
+            "evento_principal": evt_principal_clean,
+            "detalle_evento": det_evento_clean,
+            "partidos": [partido_clean]
+        }
+        eventos_roku_limpios.append(evento_nuevo)
 
-    # json_roku = {
-    #     "fecha_actualizacion": fecha_actualizacion_iso,
-    #     "fecha_guia": fecha_guia_str,
-    #     "eventos_relevantes": eventos_roku_limpios
-    # }
+    json_roku = {
+        "fecha_actualizacion": fecha_actualizacion_iso,
+        "fecha_guia": fecha_guia_str,
+        "eventos_relevantes": eventos_roku_limpios
+    }
 
     # --- 4. GUARDADO Y SUBIDA ---
     
@@ -218,17 +220,17 @@ def main():
     with open(NOMBRE_ARCHIVO_SALIDA_LEGACY, 'w', encoding='utf-8') as f:
         json.dump(json_legacy, f, indent=4, ensure_ascii=False)
 
-    # print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_ROKU} (Top 6 Limpio)...") # COMENTADO
-    # with open(NOMBRE_ARCHIVO_SALIDA_ROKU, 'w', encoding='utf-8') as f:
-    #     json.dump(json_roku, f, indent=4, ensure_ascii=False)
+    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_ROKU} (Top 6 Limpio)...")
+    with open(NOMBRE_ARCHIVO_SALIDA_ROKU, 'w', encoding='utf-8') as f:
+        json.dump(json_roku, f, indent=4, ensure_ascii=False)
 
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
         print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
         return
     
     print("5. Subiendo archivos al servidor FTP...")
-    # MODIFICADO: Solo subimos el Legacy por ahora
-    archivos_a_subir = [NOMBRE_ARCHIVO_SALIDA_LEGACY] 
+    # MODIFICADO: Ahora subimos ambos archivos
+    archivos_a_subir = [NOMBRE_ARCHIVO_SALIDA_LEGACY, NOMBRE_ARCHIVO_SALIDA_ROKU]
     
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
