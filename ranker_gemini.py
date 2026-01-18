@@ -141,8 +141,8 @@ def main():
     if ranking_crudo is None:
         print("Fallo en la API de Gemini. Se generará una lista vacía.")
     else:
-        print("2. Aplicando filtro de exclusión por código y construyendo Top 6...")
-        palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino"]
+        print("2. Aplicando filtro de exclusión por código y construyendo Top 10...")
+        palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
         
         eventos_rankeados_completos = []
         descripciones_rankeadas_unicas = set()
@@ -161,7 +161,7 @@ def main():
                     break
         
         for evento, partido in eventos_rankeados_completos:
-            if len(eventos_relevantes_maestra) >= 6:
+            if len(eventos_relevantes_maestra) >= 10:
                 break
             
             evento_principal = evento.get("evento_principal", "")
