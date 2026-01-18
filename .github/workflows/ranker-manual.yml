@@ -39,7 +39,8 @@ jobs:
         run: |
           MENSAJE="✅ **ÉXITO:** El script de para encontrar los 3 eventos se ejecuto correctamente.%0A"
           MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A"
-          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes han sido ranqueados y publicados en la pagina web. 👍🏼"
+          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes del día han sido ranqueados y publicados en la pagina web. 👍🏼"
+          MENSAJE="${MENSAJE}%0ALos 10 eventos más relevantes del día han sido ranqueados y publicados para app Roku. 👍🏼"
           
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
