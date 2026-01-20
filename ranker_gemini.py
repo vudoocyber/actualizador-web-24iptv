@@ -12,7 +12,7 @@ import copy
 # --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
 NOMBRE_ARCHIVO_SALIDA_LEGACY = "eventos-relevantes.json"    # Top 3 con emojis
-NOMBRE_ARCHIVO_SALIDA_ROKU = "eventos-destacados-roku.json" # Top 10 limpio y variado
+NOMBRE_ARCHIVO_SALIDA_ROKU = "eventos-destacados-roku.json" # Top 20 limpio y variado
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
@@ -21,8 +21,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
 # --- CONFIGURACIÓN DE VARIEDAD ---
-MAX_EVENTOS_POR_LIGA = 2  # Límite estricto inicial por liga para el Top 10 final
-META_EVENTOS_ROKU = 10    # Queremos llegar a 10 sí o sí
+MAX_EVENTOS_POR_LIGA = 2  # Límite estricto inicial por liga
+META_EVENTOS_ROKU = 20    # AHORA SON 20 EVENTOS
 
 # --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
 def limpiar_texto_roku(texto):
@@ -67,7 +67,7 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT MEJORADO CON FILTRO TEMPORAL ---
+        # --- PROMPT ACTUALIZADO (PIDE 40 PARA LLENAR 20) ---
         prompt = f"""
         Rol
         Actúa como un curador senior de eventos deportivos para una plataforma de TV digital, con profundo conocimiento de preferencias de audiencia en México, Estados Unidos, Centroamérica, Canadá y España.
@@ -77,7 +77,7 @@ def obtener_ranking_eventos(lista_eventos):
 
         Fecha y hora actual (CDMX): {hora_formateada_cst}
         OBJETIVO PRINCIPAL
-        Analiza la lista completa de eventos proporcionada y selecciona EXACTAMENTE los 30 eventos más relevantes, ordenados de mayor a menor interés general.
+        Analiza la lista completa de eventos proporcionada y selecciona EXACTAMENTE los 40 eventos más relevantes, ordenados de mayor a menor interés general. Necesito una lista amplia para filtrar por variedad.
         
         REGLAS CRÍTICAS (OBLIGATORIAS)
         
@@ -99,16 +99,20 @@ def obtener_ranking_eventos(lista_eventos):
         - El objetivo es que la lista “se sienta variada y premium”.
 
         4. CRITERIOS DE ORDEN FINAL
-        Ordena los 30 eventos de arriba hacia abajo según importancia y horario (lo próximo a jugarse o en vivo tiene más valor que lo de la noche).
+        Ordena los eventos de arriba hacia abajo según importancia y horario (lo próximo a jugarse o en vivo tiene más valor que lo de la noche).
 
         FORMATO DE SALIDA (ESTRICTO)
-        Devuelve exactamente 30 líneas.
+        Devuelve exactamente 40 líneas.
         Una línea por evento.
         Formato exacto: "Equipo A vs Equipo B"
         🚫 NO usar: Numeración, Viñetas, Emojis, Fechas, Horarios.
 
         LISTA DE EVENTOS A ANALIZAR:
         {lista_texto_plano}
+        VALIDACIÓN FINAL (OBLIGATORIA ANTES DE RESPONDER)
+        Antes de entregar el resultado, verifica internamente que:
+        Son 40 eventos exactos.
+        Hay variedad real de deportes.
         """
 
         response = client.models.generate_content(
@@ -220,7 +224,7 @@ def main():
                     "partidos": [partido]
                 })
 
-        # PASO 2: RELLENO (SI FALTAN PARA LLEGAR A 10)
+        # PASO 2: RELLENO (SI FALTAN PARA LLEGAR A 20)
         faltantes = META_EVENTOS_ROKU - len(eventos_seleccionados)
         if faltantes > 0 and eventos_reserva:
             print(f"   -> Faltan {faltantes} eventos. Rellenando con reservas...")
@@ -241,7 +245,7 @@ def main():
         "eventos_relevantes": eventos_legacy
     }
 
-    # B. Archivo Roku (Top 10 Completo y Limpio)
+    # B. Archivo Roku (Top 20 Completo y Limpio)
     eventos_roku_limpios = []
     for evento in eventos_seleccionados:
         partido_orig = evento["partidos"][0]
