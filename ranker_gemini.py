@@ -12,13 +12,17 @@ import copy
 # --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
 NOMBRE_ARCHIVO_SALIDA_LEGACY = "eventos-relevantes.json"    # Top 3 con emojis
-NOMBRE_ARCHIVO_SALIDA_ROKU = "eventos-destacados-roku.json" # Top 6 limpio
+NOMBRE_ARCHIVO_SALIDA_ROKU = "eventos-destacados-roku.json" # Top 10 limpio y variado
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
+
+# --- CONFIGURACIÓN DE VARIEDAD ---
+# Máximo de eventos permitidos por misma liga/deporte en la lista final
+MAX_EVENTOS_POR_LIGA = 3 
 
 # --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
 def limpiar_texto_roku(texto):
@@ -43,7 +47,7 @@ def obtener_ranking_eventos(lista_eventos):
         print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
         return None
 
-    print("Contactando a la IA de Gemini para obtener top 10 (para filtrar 6)...")
+    print("Contactando a la IA de Gemini para obtener candidatos...")
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
@@ -54,29 +58,44 @@ def obtener_ranking_eventos(lista_eventos):
         eventos_para_analizar = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
-                eventos_para_analizar.append(f"{partido.get('descripcion', '')} {partido.get('horarios', '')}".strip())
+                # Incluimos el evento principal en el texto para que la IA sepa la liga
+                info_completa = f"{evento.get('evento_principal', '')}: {partido.get('descripcion', '')} {partido.get('horarios', '')}"
+                eventos_para_analizar.append(info_completa.strip())
         
         lista_texto_plano = "\n".join(filter(None, set(eventos_para_analizar)))
         if not lista_texto_plano:
             print("No se encontraron eventos para analizar.")
             return []
 
-        # SOLICITAMOS 10 EVENTOS PARA ASEGURAR QUE TRAS FILTROS QUEDEN AL MENOS 6
+        # --- PROMPT ACTUALIZADO (LIGA MX, LIBERTADORES Y PLAYOFFS/FINALES) ---
         prompt = f"""
-        Actúa como un curador de contenido experto y analista de tendencias EN TIEMPO REAL para una audiencia de México y Estados Unidos (USA).
-        La fecha y hora actual en el Centro de México es: {hora_formateada_cst}.
-        Tu tarea es analizar la siguiente lista de eventos y determinar los 10 más relevantes para esta audiencia.
+        Actúa como un curador de deportes experto para una TV en México y USA.
+        Fecha/Hora actual (CDMX): {hora_formateada_cst}.
+        
+        Analiza la lista y selecciona los 20 eventos más importantes para enviarlos a filtrado.
+        
+        CRITERIOS DE SELECCIÓN (JERARQUÍA ESTRICTA):
+        
+        1. **NIVEL VIP (PRIORIDAD ABSOLUTA - INCLUIR SÍ O SÍ):**
+           - **FÚTBOL:** Liga MX (Cualquier partido), Copa Libertadores, UEFA Champions League, Premier League, MLS, Eliminatorias Mundialistas y Copas de Selecciones.
+           - **INSTANCIAS DECISIVAS (Cualquier Deporte):** Si un evento es **FINAL, SEMIFINAL, PLAYOFFS, CLASIFICACIÓN, ELIMINACIÓN DIRECTA o CARRERA (GP)** de: NFL, NBA, MLB, NHL, F1 o Tenis, TIENE PRIORIDAD sobre cualquier partido de temporada regular.
+           - **F1:** Carreras de Gran Premio (Especialmente Checo Pérez).
+           - **TENIS:** Finales de torneos importantes.
 
-        Reglas de Ranking:
-        1.  **REGLA DE TIEMPO:** Ignora eventos que ya hayan finalizado.
-        2.  **REGLA DE INTERÉS:** Prioriza eventos de alto interés como Liga MX, NFL, MLB, NBA, Boxeo/UFC y partidos de equipos populares (América, Chivas, Real Madrid, Barcelona, Cowboys, Lakers, Yankees, etc.).
+        2. **NIVEL ALTO (TEMPORADA REGULAR):**
+           - Partidos normales de NFL, NBA, MLB, NHL (Priorizando equipos populares: Cowboys, Lakers, Yankees, Red Sox, Warriors, etc.).
+           - Boxeo / UFC (Carteleras estelares).
+        
+        3. **VARIEDAD:** Intenta mezclar competiciones. No pongas 10 partidos de la misma liga si hay opciones VIP de otros deportes disponibles.
+        
+        4. **TIEMPO:** Ignora eventos que ya hayan finalizado según la hora actual.
 
-        Formato de Salida:
-        - Devuelve ÚNICAMENTE la descripción exacta de los 10 eventos que seleccionaste, en orden del más al menos relevante.
-        - Cada descripción debe estar en una nueva línea.
-        - NO incluyas números, viñetas, comillas, explicaciones o texto introductorio.
+        SALIDA REQUERIDA:
+        - Devuelve una lista de los 20 mejores candidatos, ordenados por relevancia.
+        - Formato exacto por línea: "Equipo A vs Equipo B" (Solo la descripción del partido).
+        - NO uses viñetas ni numeración.
 
-        LISTA DE EVENTOS PARA ANALIZAR:
+        LISTA:
         {lista_texto_plano}
         """
 
@@ -84,13 +103,13 @@ def obtener_ranking_eventos(lista_eventos):
             model='gemini-2.0-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.2 
+                temperature=0.3
             )
         )
         
         if response.text:
             ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
-            print(f"Ranking de Gemini (Top 10 crudo) recibido: {ranking_limpio}")
+            print(f"Candidatos recibidos de Gemini: {len(ranking_limpio)}")
             return ranking_limpio
         else:
             print("Gemini devolvió una respuesta vacía.")
@@ -102,7 +121,7 @@ def obtener_ranking_eventos(lista_eventos):
 
 # --- 3. FUNCIÓN PRINCIPAL ---
 def main():
-    print(f"Iniciando proceso de ranking de eventos...")
+    print(f"Iniciando proceso de ranking variado...")
     
     fecha_actualizacion_iso = datetime.now(MEXICO_TZ).isoformat()
     
@@ -115,69 +134,92 @@ def main():
         
         fecha_guia_str = datos.get("fecha_guia")
         if not fecha_guia_str:
-            print("ERROR: No se encontró la etiqueta 'fecha_guia' en events.json. Proceso detenido.")
+            print("ERROR: No se encontró la etiqueta 'fecha_guia'.")
             return
 
         hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
         if fecha_guia_str != hoy_mexico_str:
-            print(f"ADVERTENCIA: La fecha de la guía ({fecha_guia_str}) no coincide con la fecha de hoy ({hoy_mexico_str}).")
-            print("El ranking de eventos no se actualizará para evitar mostrar datos incorrectos.")
+            print(f"ADVERTENCIA: Fecha guía ({fecha_guia_str}) != Hoy ({hoy_mexico_str}). Cancelando.")
             return
         
-        print(f"Fecha de la guía ({fecha_guia_str}) confirmada. Continuando con el ranking.")
         lista_eventos_original = datos.get("eventos", [])
         if not lista_eventos_original:
-            raise ValueError("El archivo events.json está vacío.")
+            raise ValueError("El JSON está vacío.")
         
     except Exception as e:
-        print(f"ERROR FATAL al leer o validar el archivo JSON: {e}")
+        print(f"ERROR FATAL descarga JSON: {e}")
         return
 
     ranking_crudo = obtener_ranking_eventos(lista_eventos_original)
 
-    # Lista maestra de 6 eventos
+    # Lista maestra final (Objetivo: 10 eventos variados)
     eventos_relevantes_maestra = []
+    
+    # Contador para controlar repeticiones (Ej: {"NBA": 3, "Liga MX": 2})
+    conteo_por_liga = {}
 
-    if ranking_crudo is None:
-        print("Fallo en la API de Gemini. Se generará una lista vacía.")
-    else:
-        print("2. Aplicando filtro de exclusión por código y construyendo Top 10...")
+    if ranking_crudo:
+        print("2. Aplicando filtros de VARIEDAD y CÓDIGO...")
         palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
         
-        eventos_rankeados_completos = []
-        descripciones_rankeadas_unicas = set()
+        # Pre-procesamiento: Buscar los objetos completos
+        candidatos_encontrados = []
+        descripciones_vistas = set()
 
-        for desc_relevante in ranking_crudo:
-            encontrado = False
+        for desc_gemini in ranking_crudo:
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
-                    descripcion_corta = partido.get("descripcion", "")
-                    if descripcion_corta and (descripcion_corta in desc_relevante or desc_relevante in descripcion_corta) and descripcion_corta not in descripciones_rankeadas_unicas:
-                        eventos_rankeados_completos.append((evento, partido))
-                        descripciones_rankeadas_unicas.add(descripcion_corta)
-                        encontrado = True
-                        break
-                if encontrado:
-                    break
-        
-        for evento, partido in eventos_rankeados_completos:
+                    desc_partido = partido.get("descripcion", "")
+                    # Coincidencia flexible
+                    if desc_partido and (desc_partido in desc_gemini or desc_gemini in desc_partido):
+                        if desc_partido not in descripciones_vistas:
+                            candidatos_encontrados.append((evento, partido))
+                            descripciones_vistas.add(desc_partido)
+                        break 
+                if desc_partido in descripciones_vistas: break
+
+        # Selección final con control de variedad
+        for evento, partido in candidatos_encontrados:
+            # Meta: 10 eventos para Roku
             if len(eventos_relevantes_maestra) >= 10:
                 break
             
-            evento_principal = evento.get("evento_principal", "")
-            if not any(keyword in evento_principal for keyword in palabras_prohibidas):
-                evento_relevante = {
-                    "evento_principal": evento_principal,
-                    "detalle_evento": evento.get("detalle_evento", ""),
-                    "partidos": [partido]
-                }
-                eventos_relevantes_maestra.append(evento_relevante)
+            nombre_liga = evento.get("evento_principal", "Otros")
+            
+            # FILTRO 1: Palabras prohibidas
+            if any(keyword in nombre_liga for keyword in palabras_prohibidas):
+                continue
+
+            # FILTRO 2: Control de Variedad (Tope por liga)
+            # Normalizamos el nombre de la liga (ej: "NBA Basketball" -> "NBA")
+            liga_key = nombre_liga.split()[0] if nombre_liga else "Otros" 
+            
+            conteo_actual = conteo_por_liga.get(liga_key, 0)
+            
+            if conteo_actual >= MAX_EVENTOS_POR_LIGA:
+                # Si ya tenemos 3 de esta liga, saltamos (para dar espacio a Champions, Premier, etc.)
+                # Excepción: Si nos faltan muchos eventos para llenar 6, somos permisivos
+                if len(eventos_relevantes_maestra) > 5:
+                    continue 
+            
+            # Agregar evento
+            evento_relevante = {
+                "evento_principal": nombre_liga,
+                "detalle_evento": evento.get("detalle_evento", ""),
+                "partidos": [partido]
+            }
+            eventos_relevantes_maestra.append(evento_relevante)
+            
+            # Actualizar contador
+            conteo_por_liga[liga_key] = conteo_actual + 1
         
-        print(f"Ranking Maestro (Top 6) obtenido: {[ev['partidos'][0]['descripcion'] for ev in eventos_relevantes_maestra]}")
+        print(f"Ranking Maestro Variado (Top {len(eventos_relevantes_maestra)}):")
+        for ev in eventos_relevantes_maestra:
+            print(f" - {ev['evento_principal']}: {ev['partidos'][0]['descripcion']}")
 
     # --- 3. GENERACIÓN DE ARCHIVOS ---
 
-    # A. Archivo Legacy (Top 3, con Emojis)
+    # A. Archivo Legacy (Top 3 estricto tomado de la lista variada)
     eventos_legacy = eventos_relevantes_maestra[:3]
     json_legacy = {
         "fecha_actualizacion": fecha_actualizacion_iso,
@@ -185,25 +227,22 @@ def main():
         "eventos_relevantes": eventos_legacy
     }
 
-    # B. Archivo Roku (Top 6, SIN Emojis)
+    # B. Archivo Roku (Top 10 Completo y Limpio)
     eventos_roku_limpios = []
     for evento in eventos_relevantes_maestra:
         partido_orig = evento["partidos"][0]
-        evt_principal_clean = limpiar_texto_roku(evento["evento_principal"])
-        det_evento_clean = limpiar_texto_roku(evento["detalle_evento"])
         
-        partido_clean = {
-            "detalle_partido": limpiar_texto_roku(partido_orig.get("detalle_partido", "")),
-            "descripcion": limpiar_texto_roku(partido_orig.get("descripcion", "")),
-            "horarios": limpiar_texto_roku(partido_orig.get("horarios", "")),
-            "canales": [limpiar_texto_roku(c) for c in partido_orig.get("canales", [])],
-            "competidores": [limpiar_texto_roku(c) for c in partido_orig.get("competidores", [])]
-        }
-        
+        # Limpieza profunda
         evento_nuevo = {
-            "evento_principal": evt_principal_clean,
-            "detalle_evento": det_evento_clean,
-            "partidos": [partido_clean]
+            "evento_principal": limpiar_texto_roku(evento["evento_principal"]),
+            "detalle_evento": limpiar_texto_roku(evento["detalle_evento"]),
+            "partidos": [{
+                "detalle_partido": limpiar_texto_roku(partido_orig.get("detalle_partido", "")),
+                "descripcion": limpiar_texto_roku(partido_orig.get("descripcion", "")),
+                "horarios": limpiar_texto_roku(partido_orig.get("horarios", "")),
+                "canales": [limpiar_texto_roku(c) for c in partido_orig.get("canales", [])],
+                "competidores": [limpiar_texto_roku(c) for c in partido_orig.get("competidores", [])]
+            }]
         }
         eventos_roku_limpios.append(evento_nuevo)
 
@@ -215,37 +254,33 @@ def main():
 
     # --- 4. GUARDADO Y SUBIDA ---
     
-    # Guardar Localmente
-    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_LEGACY} (Top 3)...")
+    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_LEGACY}...")
     with open(NOMBRE_ARCHIVO_SALIDA_LEGACY, 'w', encoding='utf-8') as f:
         json.dump(json_legacy, f, indent=4, ensure_ascii=False)
 
-    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_ROKU} (Top 6 Limpio)...")
+    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_ROKU}...")
     with open(NOMBRE_ARCHIVO_SALIDA_ROKU, 'w', encoding='utf-8') as f:
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
 
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
-        print("ADVERTENCIA: Faltan variables de FTP. Omitiendo la subida.")
+        print("ADVERTENCIA: Faltan variables FTP.")
         return
     
     print("5. Subiendo archivos al servidor FTP...")
-    # MODIFICADO: Ahora subimos ambos archivos
     archivos_a_subir = [NOMBRE_ARCHIVO_SALIDA_LEGACY, NOMBRE_ARCHIVO_SALIDA_ROKU]
     
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
-            
             for archivo in archivos_a_subir:
                 with open(archivo, 'rb') as file:
                     print(f"Subiendo '{archivo}'...")
                     ftp.storbinary(f'STOR {archivo}', file)
-            
-            print("¡Todos los archivos han sido subidos exitosamente!")
+            print("¡Subida completada!")
     except Exception as e:
-        print(f"ERROR FATAL durante la subida por FTP: {e}")
+        print(f"ERROR FATAL FTP: {e}")
 
 if __name__ == "__main__":
     main()
-    print("--- Proceso de ranking finalizado ---")
+    print("--- Proceso finalizado ---")
