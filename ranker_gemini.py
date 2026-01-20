@@ -20,9 +20,10 @@ RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
-# --- CONFIGURACIÓN DE VARIEDAD ---
+# --- CONFIGURACIÓN DE VARIEDAD (ESTRICTA) ---
 # Máximo de eventos permitidos por misma liga/deporte en la lista final
-MAX_EVENTOS_POR_LIGA = 3 
+# Reducido a 2 para obligar a mezclar torneos (Ej: 2 Champions + 2 Liga MX + 2 NBA...)
+MAX_EVENTOS_POR_LIGA = 2 
 
 # --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
 def limpiar_texto_roku(texto):
@@ -67,26 +68,23 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT ACTUALIZADO (LIGA MX, LIBERTADORES Y PLAYOFFS/FINALES) ---
+        # --- PROMPT ACTUALIZADO (VARIEDAD ESTRICTA) ---
         prompt = f"""
         Actúa como un curador de deportes experto para una TV en México y USA.
         Fecha/Hora actual (CDMX): {hora_formateada_cst}.
         
         Analiza la lista y selecciona los 20 eventos más importantes para enviarlos a filtrado.
         
-        CRITERIOS DE SELECCIÓN (JERARQUÍA ESTRICTA):
+        CRITERIOS DE SELECCIÓN (VARIEDAD OBLIGATORIA):
         
-        1. **NIVEL VIP (PRIORIDAD ABSOLUTA - INCLUIR SÍ O SÍ):**
-           - **FÚTBOL:** Liga MX (Cualquier partido), Copa Libertadores, UEFA Champions League, Premier League, MLS, Eliminatorias Mundialistas y Copas de Selecciones.
-           - **INSTANCIAS DECISIVAS (Cualquier Deporte):** Si un evento es **FINAL, SEMIFINAL, PLAYOFFS, CLASIFICACIÓN, ELIMINACIÓN DIRECTA o CARRERA (GP)** de: NFL, NBA, MLB, NHL, F1 o Tenis, TIENE PRIORIDAD sobre cualquier partido de temporada regular.
-           - **F1:** Carreras de Gran Premio (Especialmente Checo Pérez).
-           - **TENIS:** Finales de torneos importantes.
-
-        2. **NIVEL ALTO (TEMPORADA REGULAR):**
-           - Partidos normales de NFL, NBA, MLB, NHL (Priorizando equipos populares: Cowboys, Lakers, Yankees, Red Sox, Warriors, etc.).
-           - Boxeo / UFC (Carteleras estelares).
+        1. **REGLA DE ORO (DIVERSIDAD):** NO selecciones más de 2 o 3 partidos del mismo torneo, incluso si es Champions League o Premier League.
+           - Si hay 8 partidos de Champions, elige SOLO los 2 más atractivos (ej. donde jueguen Real Madrid, Barcelona, City, Bayern). Descarta los partidos de equipos pequeños.
         
-        3. **VARIEDAD:** Intenta mezclar competiciones. No pongas 10 partidos de la misma liga si hay opciones VIP de otros deportes disponibles.
+        2. **JERARQUÍA DE IMPORTANCIA:**
+           - **Nivel 1 (Imperdibles):** Clásicos, Finales, Eliminatorias, Partidos de Equipos Grandes (América, Chivas, Real Madrid, Barcelona, Lakers, Yankees, Cowboys).
+           - **Nivel 2 (Interés Alto):** Liga MX, Champions League, NBA, NFL, MLB.
+        
+        3. **OBJETIVO:** La lista resultante debe parecer un "Buffet" variado. Quiero ver fútbol, luego básquetbol, luego béisbol, etc.
         
         4. **TIEMPO:** Ignora eventos que ya hayan finalizado según la hora actual.
 
@@ -155,7 +153,7 @@ def main():
     # Lista maestra final (Objetivo: 10 eventos variados)
     eventos_relevantes_maestra = []
     
-    # Contador para controlar repeticiones (Ej: {"NBA": 3, "Liga MX": 2})
+    # Contador para controlar repeticiones (Ej: {"NBA": 2, "Liga MX": 1})
     conteo_por_liga = {}
 
     if ranking_crudo:
@@ -178,7 +176,7 @@ def main():
                         break 
                 if desc_partido in descripciones_vistas: break
 
-        # Selección final con control de variedad
+        # Selección final con control de variedad ESTRICTO
         for evento, partido in candidatos_encontrados:
             # Meta: 10 eventos para Roku
             if len(eventos_relevantes_maestra) >= 10:
@@ -191,15 +189,17 @@ def main():
                 continue
 
             # FILTRO 2: Control de Variedad (Tope por liga)
-            # Normalizamos el nombre de la liga (ej: "NBA Basketball" -> "NBA")
+            # Normalizamos el nombre de la liga para agrupar (ej: "NBA Basketball" -> "NBA")
+            # Usamos la primera palabra como clave simple
             liga_key = nombre_liga.split()[0] if nombre_liga else "Otros" 
             
             conteo_actual = conteo_por_liga.get(liga_key, 0)
             
+            # REGLA: Si ya hay 2 eventos de esta liga, SALTÁMOS al siguiente candidato
             if conteo_actual >= MAX_EVENTOS_POR_LIGA:
-                # Si ya tenemos 3 de esta liga, saltamos (para dar espacio a Champions, Premier, etc.)
-                # Excepción: Si nos faltan muchos eventos para llenar 6, somos permisivos
-                if len(eventos_relevantes_maestra) > 5:
+                # Excepción: Si hemos recorrido todo y nos faltan eventos (tenemos menos de 6), 
+                # permitimos repetir para no dejar la lista vacía.
+                if len(eventos_relevantes_maestra) >= 6:
                     continue 
             
             # Agregar evento
