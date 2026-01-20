@@ -67,7 +67,7 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- NUEVO PROMPT MEJORADO ---
+        # --- PROMPT MEJORADO CON FILTRO TEMPORAL ---
         prompt = f"""
         Rol
         Actúa como un curador senior de eventos deportivos para una plataforma de TV digital, con profundo conocimiento de preferencias de audiencia en México, Estados Unidos, Centroamérica, Canadá y España.
@@ -77,99 +77,38 @@ def obtener_ranking_eventos(lista_eventos):
 
         Fecha y hora actual (CDMX): {hora_formateada_cst}
         OBJETIVO PRINCIPAL
-        Analiza la lista completa de eventos proporcionada y selecciona EXACTAMENTE los 30 eventos más relevantes, ordenados de mayor a menor interés general, considerando popularidad del deporte, magnitud del evento y etapa de la competencia.
-        ⚠️ La prioridad es calidad, impacto y variedad, no cantidad por deporte.
+        Analiza la lista completa de eventos proporcionada y selecciona EXACTAMENTE los 30 eventos más relevantes, ordenados de mayor a menor interés general.
+        
         REGLAS CRÍTICAS (OBLIGATORIAS)
-        1. PRIORIDAD POR TIPO DE EVENTO (JERARQUÍA ABSOLUTA)
-        Clasifica mentalmente cada evento antes de seleccionar, usando esta jerarquía:
+        
+        1. 🕒 FILTRO TEMPORAL ESTRICTO (CRÍTICO)
+        - Compara la hora del evento con la hora actual ({hora_formateada_cst}).
+        - OMITIR INMEDIATAMENTE cualquier partido que ya haya concluido o esté en sus minutos finales.
+        - Tu lista debe ser útil para un usuario que entra AHORA MISMO a ver televisión.
+        
+        2. PRIORIDAD POR TIPO DE EVENTO (JERARQUÍA ABSOLUTA)
+        Clasifica mentalmente cada evento antes de seleccionar:
+        🟣 NIVEL 1 – EVENTOS PREMIUM (máxima prioridad): Finales, Semifinales, Champions, Mundiales, Clásicos, NFL Playoffs, NBA Finals, F1.
+        🔵 NIVEL 2 – EVENTOS TOP REGULARES: Liga MX, Premier League, NBA/NFL/MLB regular.
+        🟢 NIVEL 3 – COMPLEMENTO: Otros deportes para variedad.
 
-        🟣 NIVEL 1 – EVENTOS PREMIUM (máxima prioridad)
-        Incluye todos los posibles antes de cualquier otro nivel:
-
-        Finales, semifinales, cuartos de final
-        Copas internacionales
-        Mundiales y eliminatorias
-        Eventos únicos o estelares
-        Ejemplos:
-
-        Final / semifinal de Champions League, Libertadores, Mundial, Euro, Copa América
-        NFL Playoffs, Super Bowl
-        NBA Finals, Conference Finals
-        MLB World Series
-        Peleas estelares de boxeo (Canelo u homólogos)
-        Grandes Premios de F1
-        Finales de torneos ATP / WTA grandes
-        🔵 NIVEL 2 – EVENTOS TOP REGULARES
-        Solo si no se completa el cupo con Nivel 1:
-
-        Fútbol de alto interés:
-        Liga MX
-        Premier League
-        LaLiga
-        MLS (partidos relevantes)
-        Temporada regular:
-        NFL
-        NBA
-        MLB
-        NHL
-        (priorizando equipos populares o partidos clave)
-        🟢 NIVEL 3 – COMPLEMENTO Y VARIEDAD
-        Usar solo para completar hasta llegar a 30:
-
-        Otros deportes con seguimiento regional
-        Eventos destacados pero no masivos
-        Partidos interesantes sin ser decisivos
-        2. CONTROL DE VARIEDAD (REGLA CLAVE)
+        3. CONTROL DE VARIEDAD (REGLA CLAVE)
         ⚠️ Regla estricta de balance:
+        - Ningún deporte puede ocupar más del 40% de la lista total.
+        - Prefiere: Distintas ligas, distintos países, distintos deportes.
+        - El objetivo es que la lista “se sienta variada y premium”.
 
-        Ningún deporte puede ocupar más del 40% de la lista total
-        Evita agrupar demasiados eventos similares (ej. demasiados partidos de la misma liga o jornada)
-        Prefiere:
-        Distintas ligas
-        Distintos países
-        Distintos deportes
-        👉 El objetivo es que la lista “se sienta variada y premium”, no monótona.
-        3. CRITERIOS DE ORDEN FINAL
-        Ordena los 30 eventos de arriba hacia abajo según:
+        4. CRITERIOS DE ORDEN FINAL
+        Ordena los 30 eventos de arriba hacia abajo según importancia y horario (lo próximo a jugarse o en vivo tiene más valor que lo de la noche).
 
-        Importancia de la fase (final > semifinal > regular)
-        Popularidad del deporte en los países objetivo
-        Relevancia de los equipos/atletas
-        Potencial de audiencia y conversación social
         FORMATO DE SALIDA (ESTRICTO)
-        Devuelve exactamente 30 líneas
-        Una línea por evento
-        Formato exacto:
+        Devuelve exactamente 30 líneas.
+        Una línea por evento.
+        Formato exacto: "Equipo A vs Equipo B"
+        🚫 NO usar: Numeración, Viñetas, Emojis, Fechas, Horarios.
 
-        Equipo A vs Equipo B
-        o en deportes individuales:
-
-        Evento / Competencia – Protagonista(s)
-        🚫 NO usar:
-
-        Numeración
-        Viñetas
-        Emojis
-        Fechas
-        Horarios
-        Comentarios adicionales
-        Texto fuera de la lista
-        LISTA DE EVENTOS A ANALIZAR
-
+        LISTA DE EVENTOS A ANALIZAR:
         {lista_texto_plano}
-        VALIDACIÓN FINAL (OBLIGATORIA ANTES DE RESPONDER)
-        Antes de entregar el resultado, verifica internamente que:
-
-        Son 30 eventos exactos
-        Hay variedad real de deportes
-        Los eventos más importantes están en las primeras posiciones
-        La lista es atractiva para:
-        México
-        USA
-        Centroamérica
-        Canadá
-        España
-        FIN DEL PROMPT
         """
 
         response = client.models.generate_content(
@@ -227,7 +166,7 @@ def main():
 
     # Listas para el proceso de filtrado
     eventos_seleccionados = []
-    eventos_reserva = [] # Aquí guardaremos los que sobran (ej: la 3ra, 4ta opción de una misma liga)
+    eventos_reserva = [] # Aquí guardaremos los que sobran
     
     # Contador para controlar repeticiones (Ej: {"NBA": 2, "Liga MX": 1})
     conteo_por_liga = {}
@@ -254,7 +193,6 @@ def main():
                 if encontrado: break
 
         # PASO 1: SELECCIÓN ESTRICTA (VARIEDAD PRIMERO)
-        # Aquí forzamos que aunque la IA mande 10 de NBA, solo tomemos 2 inicialmente
         for evento, partido in candidatos_obj:
             if len(eventos_seleccionados) >= META_EVENTOS_ROKU:
                 break
@@ -266,7 +204,7 @@ def main():
             liga_key = nombre_liga.split()[0] if nombre_liga else "Otros"
             conteo_actual = conteo_por_liga.get(liga_key, 0)
             
-            # Si no hemos superado el límite de 2, entra directo a la selección principal
+            # Si no hemos superado el límite de 2, entra directo
             if conteo_actual < MAX_EVENTOS_POR_LIGA:
                 eventos_seleccionados.append({
                     "evento_principal": nombre_liga,
@@ -275,7 +213,7 @@ def main():
                 })
                 conteo_por_liga[liga_key] = conteo_actual + 1
             else:
-                # Si ya tenemos 2 de esta liga, lo mandamos a la RESERVA para rellenar después si falta
+                # Si ya tenemos 2, a la reserva
                 eventos_reserva.append({
                     "evento_principal": nombre_liga,
                     "detalle_evento": evento.get("detalle_evento", ""),
@@ -283,11 +221,9 @@ def main():
                 })
 
         # PASO 2: RELLENO (SI FALTAN PARA LLEGAR A 10)
-        # Si después de filtrar por variedad nos quedamos cortos (ej: solo salieron 7 eventos variados),
-        # usamos la reserva (donde están los repetidos de NBA, etc.) para llegar a 10.
         faltantes = META_EVENTOS_ROKU - len(eventos_seleccionados)
         if faltantes > 0 and eventos_reserva:
-            print(f"   -> Faltan {faltantes} eventos para llegar a {META_EVENTOS_ROKU}. Rellenando con reservas (ignorando variedad)...")
+            print(f"   -> Faltan {faltantes} eventos. Rellenando con reservas...")
             relleno = eventos_reserva[:faltantes]
             eventos_seleccionados.extend(relleno)
         
