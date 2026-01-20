@@ -20,16 +20,15 @@ RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
-# --- CONFIGURACIÓN DE VARIEDAD (ESTRICTA) ---
-# Máximo de eventos permitidos por misma liga/deporte en la lista final
-# Reducido a 2 para obligar a mezclar torneos (Ej: 2 Champions + 2 Liga MX + 2 NBA...)
-MAX_EVENTOS_POR_LIGA = 2 
+# --- CONFIGURACIÓN DE VARIEDAD ---
+MAX_EVENTOS_POR_LIGA = 2  # Límite estricto inicial
+META_EVENTOS_ROKU = 10    # Queremos llegar a 10 sí o sí
 
 # --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
 def limpiar_texto_roku(texto):
     if not texto:
         return ""
-    # 1. Regex para eliminar emojis
+    # Regex para eliminar emojis
     emoji_pattern = re.compile(
         r'[\U0001F000-\U0001F9FF]'
         r'|[\U00002600-\U000027BF]'
@@ -68,28 +67,25 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT ACTUALIZADO (VARIEDAD ESTRICTA) ---
+        # --- PROMPT ACTUALIZADO (PIDIENDO 30 CANDIDATOS) ---
         prompt = f"""
         Actúa como un curador de deportes experto para una TV en México y USA.
         Fecha/Hora actual (CDMX): {hora_formateada_cst}.
         
-        Analiza la lista y selecciona los 20 eventos más importantes para enviarlos a filtrado.
+        Analiza la lista y selecciona los **30 eventos más importantes**. Necesito una lista larga para poder filtrar por variedad.
         
-        CRITERIOS DE SELECCIÓN (VARIEDAD OBLIGATORIA):
+        CRITERIOS DE SELECCIÓN:
+        1. **NIVEL VIP (PRIORIDAD ABSOLUTA):**
+           - **FÚTBOL:** Liga MX, Copa Libertadores, Champions League, Premier League, MLS, Eliminatorias/Copas.
+           - **PLAYOFFS/FINALES:** Cualquier deporte en instancias finales (NBA Finals, NFL Playoffs, MLB World Series, etc.).
+           - **F1 y BOXEO:** Carreras de GP y Peleas estelares (Canelo).
         
-        1. **REGLA DE ORO (DIVERSIDAD):** NO selecciones más de 2 o 3 partidos del mismo torneo, incluso si es Champions League o Premier League.
-           - Si hay 8 partidos de Champions, elige SOLO los 2 más atractivos (ej. donde jueguen Real Madrid, Barcelona, City, Bayern). Descarta los partidos de equipos pequeños.
+        2. **NIVEL ALTO:** Temporada regular de NBA, NFL, MLB, NHL (Equipos populares).
         
-        2. **JERARQUÍA DE IMPORTANCIA:**
-           - **Nivel 1 (Imperdibles):** Clásicos, Finales, Eliminatorias, Partidos de Equipos Grandes (América, Chivas, Real Madrid, Barcelona, Lakers, Yankees, Cowboys).
-           - **Nivel 2 (Interés Alto):** Liga MX, Champions League, NBA, NFL, MLB.
-        
-        3. **OBJETIVO:** La lista resultante debe parecer un "Buffet" variado. Quiero ver fútbol, luego básquetbol, luego béisbol, etc.
-        
-        4. **TIEMPO:** Ignora eventos que ya hayan finalizado según la hora actual.
+        3. **VARIEDAD:** Intenta elegir un poco de todo.
 
         SALIDA REQUERIDA:
-        - Devuelve una lista de los 20 mejores candidatos, ordenados por relevancia.
+        - Devuelve una lista de los 30 mejores candidatos.
         - Formato exacto por línea: "Equipo A vs Equipo B" (Solo la descripción del partido).
         - NO uses viñetas ni numeración.
 
@@ -150,77 +146,78 @@ def main():
 
     ranking_crudo = obtener_ranking_eventos(lista_eventos_original)
 
-    # Lista maestra final (Objetivo: 10 eventos variados)
-    eventos_relevantes_maestra = []
+    # Listas para el proceso de filtrado
+    eventos_seleccionados = []
+    eventos_reserva = [] # Aquí guardaremos los que sobran (ej: la 3ra, 4ta y 5ta opción de NBA)
     
     # Contador para controlar repeticiones (Ej: {"NBA": 2, "Liga MX": 1})
     conteo_por_liga = {}
 
     if ranking_crudo:
-        print("2. Aplicando filtros de VARIEDAD y CÓDIGO...")
+        print("2. Procesando candidatos y aplicando estrategia de Doble Paso...")
         palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
         
-        # Pre-procesamiento: Buscar los objetos completos
-        candidatos_encontrados = []
+        # Encontramos los objetos completos primero
+        candidatos_obj = []
         descripciones_vistas = set()
 
         for desc_gemini in ranking_crudo:
+            encontrado = False
             for evento in lista_eventos_original:
                 for partido in evento.get("partidos", []):
                     desc_partido = partido.get("descripcion", "")
-                    # Coincidencia flexible
                     if desc_partido and (desc_partido in desc_gemini or desc_gemini in desc_partido):
                         if desc_partido not in descripciones_vistas:
-                            candidatos_encontrados.append((evento, partido))
+                            candidatos_obj.append((evento, partido))
                             descripciones_vistas.add(desc_partido)
+                            encontrado = True
                         break 
-                if desc_partido in descripciones_vistas: break
+                if encontrado: break
 
-        # Selección final con control de variedad ESTRICTO
-        for evento, partido in candidatos_encontrados:
-            # Meta: 10 eventos para Roku
-            if len(eventos_relevantes_maestra) >= 10:
+        # PASO 1: SELECCIÓN ESTRICTA (VARIEDAD PRIMERO)
+        for evento, partido in candidatos_obj:
+            if len(eventos_seleccionados) >= META_EVENTOS_ROKU:
                 break
             
             nombre_liga = evento.get("evento_principal", "Otros")
-            
-            # FILTRO 1: Palabras prohibidas
             if any(keyword in nombre_liga for keyword in palabras_prohibidas):
                 continue
 
-            # FILTRO 2: Control de Variedad (Tope por liga)
-            # Normalizamos el nombre de la liga para agrupar (ej: "NBA Basketball" -> "NBA")
-            # Usamos la primera palabra como clave simple
-            liga_key = nombre_liga.split()[0] if nombre_liga else "Otros" 
-            
+            liga_key = nombre_liga.split()[0] if nombre_liga else "Otros"
             conteo_actual = conteo_por_liga.get(liga_key, 0)
             
-            # REGLA: Si ya hay 2 eventos de esta liga, SALTÁMOS al siguiente candidato
-            if conteo_actual >= MAX_EVENTOS_POR_LIGA:
-                # Excepción: Si hemos recorrido todo y nos faltan eventos (tenemos menos de 6), 
-                # permitimos repetir para no dejar la lista vacía.
-                if len(eventos_relevantes_maestra) >= 6:
-                    continue 
-            
-            # Agregar evento
-            evento_relevante = {
-                "evento_principal": nombre_liga,
-                "detalle_evento": evento.get("detalle_evento", ""),
-                "partidos": [partido]
-            }
-            eventos_relevantes_maestra.append(evento_relevante)
-            
-            # Actualizar contador
-            conteo_por_liga[liga_key] = conteo_actual + 1
+            # Si no hemos superado el límite de 2, entra directo a la selección principal
+            if conteo_actual < MAX_EVENTOS_POR_LIGA:
+                eventos_seleccionados.append({
+                    "evento_principal": nombre_liga,
+                    "detalle_evento": evento.get("detalle_evento", ""),
+                    "partidos": [partido]
+                })
+                conteo_por_liga[liga_key] = conteo_actual + 1
+            else:
+                # Si ya tenemos 2 de esta liga, lo mandamos a la RESERVA para rellenar después si falta
+                eventos_reserva.append({
+                    "evento_principal": nombre_liga,
+                    "detalle_evento": evento.get("detalle_evento", ""),
+                    "partidos": [partido]
+                })
+
+        # PASO 2: RELLENO (SI FALTAN PARA LLEGAR A 10)
+        faltantes = META_EVENTOS_ROKU - len(eventos_seleccionados)
+        if faltantes > 0 and eventos_reserva:
+            print(f"   -> Faltan {faltantes} eventos para llegar a {META_EVENTOS_ROKU}. Rellenando con reservas (ignorando variedad)...")
+            # Tomamos los primeros de la reserva hasta completar
+            relleno = eventos_reserva[:faltantes]
+            eventos_seleccionados.extend(relleno)
         
-        print(f"Ranking Maestro Variado (Top {len(eventos_relevantes_maestra)}):")
-        for ev in eventos_relevantes_maestra:
-            print(f" - {ev['evento_principal']}: {ev['partidos'][0]['descripcion']}")
+        print(f"Ranking Final Generado (Total: {len(eventos_seleccionados)}):")
+        for i, ev in enumerate(eventos_seleccionados, 1):
+            print(f" {i}. {ev['evento_principal']}: {ev['partidos'][0]['descripcion']}")
 
     # --- 3. GENERACIÓN DE ARCHIVOS ---
 
-    # A. Archivo Legacy (Top 3 estricto tomado de la lista variada)
-    eventos_legacy = eventos_relevantes_maestra[:3]
+    # A. Archivo Legacy (Top 3 estricto)
+    eventos_legacy = eventos_seleccionados[:3]
     json_legacy = {
         "fecha_actualizacion": fecha_actualizacion_iso,
         "fecha_guia": fecha_guia_str,
@@ -229,10 +226,9 @@ def main():
 
     # B. Archivo Roku (Top 10 Completo y Limpio)
     eventos_roku_limpios = []
-    for evento in eventos_relevantes_maestra:
+    for evento in eventos_seleccionados:
         partido_orig = evento["partidos"][0]
         
-        # Limpieza profunda
         evento_nuevo = {
             "evento_principal": limpiar_texto_roku(evento["evento_principal"]),
             "detalle_evento": limpiar_texto_roku(evento["detalle_evento"]),
