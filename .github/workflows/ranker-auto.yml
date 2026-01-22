@@ -1,4 +1,4 @@
-name: Ranqueo Auto 3 eventos con Gemini 
+name: Ranqueo Eventos Relevantes Gemini 
 
 on:
   schedule:
