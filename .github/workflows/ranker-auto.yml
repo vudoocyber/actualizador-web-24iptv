@@ -2,7 +2,8 @@ name: Ranqueo Auto 3 eventos con Gemini
 
 on:
   schedule:
-    - cron: '0 1,5,9,13,17,21 * * *'
+    # Cronograma estratégico: 6pm, 9pm, 4am, 7am, 10am, 2pm (Horas CDMX convertidas a UTC)
+    - cron: '0 0,3,10,13,16,20 * * *'
   workflow_dispatch:
 
 jobs:
