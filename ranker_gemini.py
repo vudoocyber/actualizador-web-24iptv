@@ -21,8 +21,8 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
 # --- CONFIGURACIÓN DE VARIEDAD ---
-MAX_EVENTOS_POR_LIGA = 2  # Límite estricto inicial por liga
-META_EVENTOS_ROKU = 20    # AHORA SON 20 EVENTOS
+MAX_EVENTOS_POR_LIGA = 2  # Límite general para la lista
+META_EVENTOS_ROKU = 40    # Pedimos 40 candidatos a la IA para tener de sobra al filtrar
 
 # --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
 def limpiar_texto_roku(texto):
@@ -53,7 +53,8 @@ def obtener_ranking_eventos(lista_eventos):
         
         cst_offset = timezone(timedelta(hours=-6))
         hora_actual_cst = datetime.now(cst_offset)
-        hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p CST')
+        # Formato claro con AM/PM para facilitar la comparación a la IA
+        hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p (Hora Centro México)')
         
         eventos_para_analizar = []
         for evento in lista_eventos:
@@ -67,52 +68,38 @@ def obtener_ranking_eventos(lista_eventos):
             print("No se encontraron eventos para analizar.")
             return []
 
-        # --- PROMPT ACTUALIZADO (PIDE 40 PARA LLENAR 20) ---
+        # --- PROMPT REFORZADO (TIEMPO Y VARIEDAD) ---
         prompt = f"""
         Rol
-        Actúa como un curador senior de eventos deportivos para una plataforma de TV digital, con profundo conocimiento de preferencias de audiencia en México, Estados Unidos, Centroamérica, Canadá y España.
-
-        Tu objetivo es maximizar interés, clics y retención, no solo relevancia técnica.
-        Contexto temporal
-
-        Fecha y hora actual (CDMX): {hora_formateada_cst}
-        OBJETIVO PRINCIPAL
-        Analiza la lista completa de eventos proporcionada y selecciona EXACTAMENTE los 40 eventos más relevantes, ordenados de mayor a menor interés general. Necesito una lista amplia para filtrar por variedad.
+        Actúa como un curador senior de eventos deportivos.
         
-        REGLAS CRÍTICAS (OBLIGATORIAS)
+        CONTEXTO TEMPORAL CRÍTICO
+        ⚠️ **FECHA Y HORA ACTUAL (CDMX/Centro): {hora_formateada_cst}** ⚠️
         
-        1. 🕒 FILTRO TEMPORAL ESTRICTO (CRÍTICO)
-        - Compara la hora del evento con la hora actual ({hora_formateada_cst}).
-        - OMITIR INMEDIATAMENTE cualquier partido que ya haya concluido o esté en sus minutos finales.
-        - Tu lista debe ser útil para un usuario que entra AHORA MISMO a ver televisión.
+        OBJETIVO
+        Analiza la lista y selecciona los 40 eventos más relevantes VIGENTES (que se estén jugando ahora o vayan a empezar pronto).
         
-        2. PRIORIDAD POR TIPO DE EVENTO (JERARQUÍA ABSOLUTA)
-        Clasifica mentalmente cada evento antes de seleccionar:
-        🟣 NIVEL 1 – EVENTOS PREMIUM (máxima prioridad): Finales, Semifinales, Champions, Mundiales, Clásicos, NFL Playoffs, NBA Finals, F1.
-        🔵 NIVEL 2 – EVENTOS TOP REGULARES: Liga MX, Premier League, NBA/NFL/MLB regular.
-        🟢 NIVEL 3 – COMPLEMENTO: Otros deportes para variedad.
+        ⛔ REGLA CERO: FILTRO DE TIEMPO (ESTRICTO)
+        - TU PRIMERA TAREA ES DESCARTAR LO QUE YA TERMINÓ.
+        - Ejemplo: Si la hora actual es 6:00 PM y el partido dice "2:00 PM Centro", **ESTÁ TERMINADO. NO LO INCLUYAS.**
+        - Ignora partidos finalizados, por más importantes que hayan sido (ej. Champions League de la tarde si ya es de noche).
+        - Prioriza eventos **EN VIVO** o **POR COMENZAR**.
 
-        3. CONTROL DE VARIEDAD (REGLA CLAVE)
-        ⚠️ Regla estricta de balance:
-        - Ningún deporte puede ocupar más del 40% de la lista total.
-        - Prefiere: Distintas ligas, distintos países, distintos deportes.
-        - El objetivo es que la lista “se sienta variada y premium”.
+        REGLAS DE SELECCIÓN
+        1. **JERARQUÍA:**
+           - NIVEL 1 (PREMIUM): Finales, Clásicos, Liguilla Liga MX, Champions (solo si es horario vigente), Selección Mexicana.
+           - NIVEL 2 (TOP): NBA, NFL, MLB, Premier League.
+        
+        2. **VARIEDAD OBLIGATORIA:**
+           - No quiero una lista monotemática. Mezcla deportes.
+        
+        FORMATO DE SALIDA
+        - Devuelve exactamente 40 líneas.
+        - Solo el texto: "Equipo A vs Equipo B"
+        - Sin numeración, sin viñetas.
 
-        4. CRITERIOS DE ORDEN FINAL
-        Ordena los eventos de arriba hacia abajo según importancia y horario (lo próximo a jugarse o en vivo tiene más valor que lo de la noche).
-
-        FORMATO DE SALIDA (ESTRICTO)
-        Devuelve exactamente 40 líneas.
-        Una línea por evento.
-        Formato exacto: "Equipo A vs Equipo B"
-        🚫 NO usar: Numeración, Viñetas, Emojis, Fechas, Horarios.
-
-        LISTA DE EVENTOS A ANALIZAR:
+        LISTA A ANALIZAR:
         {lista_texto_plano}
-        VALIDACIÓN FINAL (OBLIGATORIA ANTES DE RESPONDER)
-        Antes de entregar el resultado, verifica internamente que:
-        Son 40 eventos exactos.
-        Hay variedad real de deportes.
         """
 
         response = client.models.generate_content(
@@ -170,19 +157,17 @@ def main():
 
     # Listas para el proceso de filtrado
     eventos_seleccionados = []
-    eventos_reserva = [] # Aquí guardaremos los que sobran
-    
-    # Contador para controlar repeticiones (Ej: {"NBA": 2, "Liga MX": 1})
+    eventos_reserva = [] 
     conteo_por_liga = {}
 
     if ranking_crudo:
-        print("2. Procesando candidatos y aplicando estrategia de Doble Paso...")
+        print("2. Procesando candidatos y aplicando FILTRO DE VARIEDAD TOP 3...")
         palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
         
-        # Encontramos los objetos completos primero
         candidatos_obj = []
         descripciones_vistas = set()
 
+        # Mapeo de texto Gemini a objetos originales
         for desc_gemini in ranking_crudo:
             encontrado = False
             for evento in lista_eventos_original:
@@ -196,9 +181,11 @@ def main():
                         break 
                 if encontrado: break
 
-        # PASO 1: SELECCIÓN ESTRICTA (VARIEDAD PRIMERO)
+        # SELECCIÓN CON REGLAS ESTRICTAS
+        META_FINAL = 20 # Definido en la configuración o aquí localmente
+        
         for evento, partido in candidatos_obj:
-            if len(eventos_seleccionados) >= META_EVENTOS_ROKU:
+            if len(eventos_seleccionados) >= META_FINAL:
                 break
             
             nombre_liga = evento.get("evento_principal", "Otros")
@@ -208,7 +195,19 @@ def main():
             liga_key = nombre_liga.split()[0] if nombre_liga else "Otros"
             conteo_actual = conteo_por_liga.get(liga_key, 0)
             
-            # Si no hemos superado el límite de 2, entra directo
+            # --- REGLA CRÍTICA PARA EL TOP 3 ---
+            # Si estamos llenando los espacios 1, 2 o 3 (índices 0, 1, 2)
+            # NO PERMITIMOS REPETIR LIGA. Límite = 1.
+            if len(eventos_seleccionados) < 3 and conteo_actual >= 1:
+                # Ya hay uno de esta liga en el Top 3. Lo mandamos a reserva para usarlo después (puesto 4+)
+                eventos_reserva.append({
+                    "evento_principal": nombre_liga,
+                    "detalle_evento": evento.get("detalle_evento", ""),
+                    "partidos": [partido]
+                })
+                continue 
+
+            # --- REGLA GENERAL PARA EL RESTO ---
             if conteo_actual < MAX_EVENTOS_POR_LIGA:
                 eventos_seleccionados.append({
                     "evento_principal": nombre_liga,
@@ -217,17 +216,16 @@ def main():
                 })
                 conteo_por_liga[liga_key] = conteo_actual + 1
             else:
-                # Si ya tenemos 2, a la reserva
                 eventos_reserva.append({
                     "evento_principal": nombre_liga,
                     "detalle_evento": evento.get("detalle_evento", ""),
                     "partidos": [partido]
                 })
 
-        # PASO 2: RELLENO (SI FALTAN PARA LLEGAR A 20)
-        faltantes = META_EVENTOS_ROKU - len(eventos_seleccionados)
+        # RELLENO SI FALTAN
+        faltantes = META_FINAL - len(eventos_seleccionados)
         if faltantes > 0 and eventos_reserva:
-            print(f"   -> Faltan {faltantes} eventos. Rellenando con reservas...")
+            print(f"   -> Rellenando {faltantes} espacios con reservas...")
             relleno = eventos_reserva[:faltantes]
             eventos_seleccionados.extend(relleno)
         
@@ -237,7 +235,7 @@ def main():
 
     # --- 3. GENERACIÓN DE ARCHIVOS ---
 
-    # A. Archivo Legacy (Top 3 estricto)
+    # A. Archivo Legacy (Top 3 estricto y variado)
     eventos_legacy = eventos_seleccionados[:3]
     json_legacy = {
         "fecha_actualizacion": fecha_actualizacion_iso,
@@ -245,7 +243,7 @@ def main():
         "eventos_relevantes": eventos_legacy
     }
 
-    # B. Archivo Roku (Top 20 Completo y Limpio)
+    # B. Archivo Roku (Top 20)
     eventos_roku_limpios = []
     for evento in eventos_seleccionados:
         partido_orig = evento["partidos"][0]
