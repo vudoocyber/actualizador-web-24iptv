@@ -1,4 +1,4 @@
-name: Ranqueo Manual 3 eventos con Gemini
+name: Ranqueo Manual Dual (Web + Roku)
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          # ACTUALIZADO: Cambiamos google-generativeai por google-genai para coincidir con el script
+          # ACTUALIZADO: Usamos google-genai para el nuevo script
           pip install --upgrade requests beautifulsoup4 google-genai pytz cohere packaging
 
       - name: Ejecutar script de ranking y subida
@@ -37,10 +37,10 @@ jobs:
       - name: Enviar notificación de éxito a Telegram
         if: success()
         run: |
-          MENSAJE="✅ **ÉXITO:** El script de para encontrar los 3 eventos se ejecuto correctamente.%0A"
+          MENSAJE="✅ **ÉXITO:** El script de Ranking Manual se ejecutó correctamente.%0A"
           MENSAJE="${MENSAJE}%0A**Script:** ${{ github.workflow }}%0A"
-          MENSAJE="${MENSAJE}%0ALos 3 eventos más relevantes del día han sido ranqueados y publicados en la pagina web. 👍🏼"
-          MENSAJE="${MENSAJE}%0ALos 10 eventos más relevantes del día han sido ranqueados y publicados para app Roku. 👍🏼"
+          MENSAJE="${MENSAJE}%0A1️⃣ **WEB:** Top 3 eventos publicados (Legacy). 👍🏼"
+          MENSAJE="${MENSAJE}%0A2️⃣ **ROKU:** Top 20 eventos variados publicados. 📺"
           
           curl -s -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
