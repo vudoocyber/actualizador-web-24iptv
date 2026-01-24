@@ -14,9 +14,9 @@ URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
 URL_JSON_LEGACY_CHECK = "https://24hometv.xyz/eventos-relevantes.json"
 
 # Nombres de Archivos
-ARCHIVO_LEGACY = "eventos-relevantes.json"        # Top 5 | Emojis | 1 vez al día
+ARCHIVO_LEGACY = "eventos-relevantes.json"        # Top 5 | Emojis | 1 vez al día (Telegram)
 ARCHIVO_ROKU = "eventos-destacados-roku.json"     # Top 20 | Limpio | Recurrente
-ARCHIVO_WEB = "eventos-importantes-web.json"      # Top 3  | Emojis | Recurrente
+ARCHIVO_WEB = "eventos-importantes-web.json"      # Top Dinámico (3 o 5) | Emojis | Recurrente
 
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
@@ -50,12 +50,11 @@ def limpiar_texto_roku(texto):
 def verificar_necesidad_legacy(hoy_str):
     """
     Verifica si el archivo legacy en el servidor ya tiene la fecha de hoy.
-    Retorna True si DEBEMOS generar uno nuevo (porque el online es viejo o no existe).
-    Retorna False si el online ya es de hoy (no sobreescribir).
+    Retorna True si DEBEMOS generar uno nuevo.
+    Retorna False si el online ya es de hoy.
     """
     print(f"Verificando estado de '{ARCHIVO_LEGACY}' en servidor...")
     try:
-        # Usamos un user-agent para evitar bloqueos
         headers = {'User-Agent': 'Mozilla/5.0'}
         resp = requests.get(URL_JSON_LEGACY_CHECK, headers=headers, params={'v': datetime.now().timestamp()}, timeout=10)
         
@@ -92,12 +91,10 @@ def obtener_ranking_eventos(lista_eventos):
         hora_actual = datetime.now(cst_offset).strftime('%A, %d de %B - %I:%M %p (CDMX)')
         
         # Construcción de la lista para análisis
-        # AHORA INCLUIMOS CANALES PARA DETECTAR PPV
         eventos_para_analizar = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
                 canales_str = ", ".join(partido.get('canales', []))
-                # Formato rico en datos para la IA
                 info = (f"LIGA: {evento.get('evento_principal', '')} | "
                         f"PARTIDO: {partido.get('descripcion', '')} | "
                         f"HORA: {partido.get('horarios', '')} | "
@@ -108,7 +105,7 @@ def obtener_ranking_eventos(lista_eventos):
         if not lista_texto:
             return []
 
-        # --- PROMPT ACTUALIZADO ---
+        # --- PROMPT ---
         prompt = f"""
         Rol: Curador experto de deportes para **MÉXICO**.
         Audiencia: **Clase Media-Alta** (Alto poder adquisitivo).
@@ -121,16 +118,16 @@ def obtener_ranking_eventos(lista_eventos):
         CRITERIOS DE SELECCIÓN (ESTRICTOS):
         
         1. 💰 **FACTOR PPV (PRIORIDAD SUPREMA):**
-           - Analiza los CANALES. Si ves **"PPV"**, "Pago por Evento", "Box Azteca" (estelar), "UFC", o exclusivas premium, **DALE PRIORIDAD MÁXIMA**.
-           - Esta audiencia paga por ver: Boxeo (Canelo), UFC, F1 (Checo Pérez), Golf, Tenis (Grand Slams).
+           - Analiza los CANALES. Si ves **"PPV"**, "Pago por Evento", "Box Azteca", "UFC", o exclusivas premium, **DALE PRIORIDAD MÁXIMA**.
+           - Esta audiencia paga por ver: Boxeo (Canelo), UFC, F1 (Checo Pérez), Golf, Tenis.
            
         2. 🇲🇽 **ENFOQUE 100% MÉXICO:**
            - Prioridad: **Liga MX** (Equipos grandes: América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey).
            - Prioridad: **Selección Mexicana**.
-           - Prioridad: **Mexicanos en Europa/USA** (Edson Álvarez, Santi Giménez, Jaime Jaquez NBA, etc.).
+           - Prioridad: **Mexicanos en Europa/USA**.
            
         3. 🏆 **EVENTOS PREMIUM INTERNACIONALES:**
-           - NFL (Primetime/Playoffs - Cowboys, Steelers, 49ers, Chiefs).
+           - NFL (Primetime/Playoffs).
            - Champions League (Real Madrid, Barcelona).
            - NBA (Lakers, Warriors, Celtics).
            - MLB (Yankees, Dodgers, Astros).
@@ -173,6 +170,16 @@ def main():
     fecha_iso = fecha_actual_dt.isoformat()
     hoy_str = fecha_actual_dt.strftime('%Y-%m-%d')
     
+    # --- LOGICA DE FIN DE SEMANA (NUEVO) ---
+    # weekday(): 0=Lunes ... 4=Viernes, 5=Sábado, 6=Domingo
+    dia_semana = fecha_actual_dt.weekday()
+    if dia_semana >= 5:
+        limit_web = 5
+        print("📅 Es Fin de Semana: El archivo WEB tendrá 5 eventos.")
+    else:
+        limit_web = 3
+        print("📅 Es Día de Semana: El archivo WEB tendrá 3 eventos.")
+
     # 1. Determinar si generamos el Legacy
     generar_legacy = verificar_necesidad_legacy(hoy_str)
     
@@ -183,7 +190,6 @@ def main():
         resp.raise_for_status()
         datos = resp.json()
         
-        # Validación de fecha de la fuente
         if datos.get("fecha_guia") != hoy_str:
             print(f"ERROR: La fecha de la guía ({datos.get('fecha_guia')}) no es de hoy ({hoy_str}). Abortando.")
             return
@@ -207,16 +213,14 @@ def main():
     eventos_reserva = []
     conteo_liga = {}
     
-    # Mapeo IA -> Objetos
     candidatos_obj = []
     vistos = set()
     
-    # Búsqueda un poco más robusta para coincidir texto IA con JSON
+    # Mapeo IA -> Objetos
     for desc_ia in ranking_ia:
         encontrado = False
         for evento in lista_original:
             for partido in evento.get("partidos", []):
-                # Normalizamos un poco para comparar
                 d_orig = partido.get("descripcion", "")
                 if d_orig and (d_orig in desc_ia or desc_ia in d_orig):
                     if d_orig not in vistos:
@@ -226,12 +230,11 @@ def main():
                     break
             if encontrado: break
             
-    # Filtro de Variedad (Top 2 por liga inicial)
-    # Meta: Tener al menos 20 eventos de calidad
+    # Filtro de Variedad
     palabras_off = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
     
     for evento, partido in candidatos_obj:
-        if len(eventos_seleccionados) >= 40: # Límite de seguridad interno
+        if len(eventos_seleccionados) >= 40: 
             break
         
         nombre_liga = evento.get("evento_principal", "Otros")
@@ -240,7 +243,7 @@ def main():
         key = nombre_liga.split()[0] if nombre_liga else "Otros"
         count = conteo_liga.get(key, 0)
         
-        # Regla Top 3 (Web/Legacy): Diversidad máxima (1 por liga en el podio)
+        # Regla: Para las primeras posiciones (Legacy/Web), diversidad máxima
         if len(eventos_seleccionados) < 3 and count >= 1:
             eventos_reserva.append((evento, partido, nombre_liga))
             continue
@@ -251,7 +254,7 @@ def main():
         else:
             eventos_reserva.append((evento, partido, nombre_liga))
 
-    # Relleno para llegar a 20 (Meta Roku)
+    # Relleno para llegar a 20 (Meta Roku mínima)
     if len(eventos_seleccionados) < 20 and eventos_reserva:
         faltan = 20 - len(eventos_seleccionados)
         eventos_seleccionados.extend(eventos_reserva[:faltan])
@@ -283,13 +286,11 @@ def main():
     else:
         print(f"Saltando {ARCHIVO_LEGACY} (Ya existe para hoy).")
 
-    # B. EVENTOS-DESTACADOS-ROKU (Roku - Top 20 - Limpio - Recurrente)
+    # B. EVENTOS-DESTACADOS-ROKU (Top 20 - Limpio)
     top_20_roku = []
-    # Aseguramos tener hasta 20 (o los que haya)
     limit_roku = min(len(eventos_seleccionados), 20)
     
     for ev, pt, nom in eventos_seleccionados[:limit_roku]:
-        # Limpieza profunda
         pt_clean = copy.deepcopy(pt)
         pt_clean["detalle_partido"] = limpiar_texto_roku(pt.get("detalle_partido", ""))
         pt_clean["descripcion"] = limpiar_texto_roku(pt.get("descripcion", ""))
@@ -313,10 +314,13 @@ def main():
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_ROKU)
 
-    # C. EVENTOS-IMPORTANTES-WEB (Nuevo - Top 3 - Emojis - Recurrente)
-    top_3_web = []
-    for ev, pt, nom in eventos_seleccionados[:3]:
-        top_3_web.append({
+    # C. EVENTOS-IMPORTANTES-WEB (Top Dinámico: 3 o 5)
+    top_web = []
+    # Usamos la variable limit_web calculada al inicio
+    limit_real_web = min(len(eventos_seleccionados), limit_web)
+
+    for ev, pt, nom in eventos_seleccionados[:limit_real_web]:
+        top_web.append({
             "evento_principal": nom,
             "detalle_evento": ev.get("detalle_evento", ""),
             "partidos": [pt]
@@ -325,9 +329,9 @@ def main():
     json_web = {
         "fecha_actualizacion": fecha_iso,
         "fecha_guia": hoy_str,
-        "eventos_relevantes": top_3_web
+        "eventos_relevantes": top_web
     }
-    print(f"Generando {ARCHIVO_WEB} (Top 3 Web)...")
+    print(f"Generando {ARCHIVO_WEB} (Top {limit_web} Web)...")
     with open(ARCHIVO_WEB, 'w', encoding='utf-8') as f:
         json.dump(json_web, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_WEB)
