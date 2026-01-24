@@ -11,8 +11,13 @@ import copy
 
 # --- 1. CONFIGURACIÓN ---
 URL_JSON_FUENTE = "https://24hometv.xyz/events.json"
-NOMBRE_ARCHIVO_SALIDA_LEGACY = "eventos-relevantes.json"    # Top 3 con emojis
-NOMBRE_ARCHIVO_SALIDA_ROKU = "eventos-destacados-roku.json" # Top 20 limpio y variado
+URL_JSON_LEGACY_CHECK = "https://24hometv.xyz/eventos-relevantes.json"
+
+# Nombres de Archivos
+ARCHIVO_LEGACY = "eventos-relevantes.json"        # Top 5 | Emojis | 1 vez al día
+ARCHIVO_ROKU = "eventos-destacados-roku.json"     # Top 20 | Limpio | Recurrente
+ARCHIVO_WEB = "eventos-importantes-web.json"      # Top 3  | Emojis | Recurrente
+
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
@@ -20,15 +25,16 @@ RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
-# --- CONFIGURACIÓN DE VARIEDAD ---
-MAX_EVENTOS_POR_LIGA = 2  # Límite general para la lista
-META_EVENTOS_ROKU = 40    # Pedimos 40 candidatos a la IA para tener de sobra al filtrar
+# Configuración de Variedad
+MAX_EVENTOS_POR_LIGA = 2  
+META_CANDIDATOS_IA = 50   # Pedimos muchos para poder filtrar bien
 
-# --- FUNCIÓN DE LIMPIEZA PARA ROKU ---
+# --- 2. FUNCIONES AUXILIARES ---
+
 def limpiar_texto_roku(texto):
+    """Elimina emojis y caracteres especiales para Roku."""
     if not texto:
         return ""
-    # Regex para eliminar emojis
     emoji_pattern = re.compile(
         r'[\U0001F000-\U0001F9FF]'
         r'|[\U00002600-\U000027BF]'
@@ -41,261 +47,308 @@ def limpiar_texto_roku(texto):
     texto_limpio = emoji_pattern.sub('', texto)
     return re.sub(r'\s+', ' ', texto_limpio).strip()
 
-# --- 2. FUNCIÓN PARA LLAMAR A GEMINI ---
+def verificar_necesidad_legacy(hoy_str):
+    """
+    Verifica si el archivo legacy en el servidor ya tiene la fecha de hoy.
+    Retorna True si DEBEMOS generar uno nuevo (porque el online es viejo o no existe).
+    Retorna False si el online ya es de hoy (no sobreescribir).
+    """
+    print(f"Verificando estado de '{ARCHIVO_LEGACY}' en servidor...")
+    try:
+        # Usamos un user-agent para evitar bloqueos
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(URL_JSON_LEGACY_CHECK, headers=headers, params={'v': datetime.now().timestamp()}, timeout=10)
+        
+        if resp.status_code == 200:
+            datos = resp.json()
+            fecha_remota = datos.get("fecha_guia")
+            if fecha_remota == hoy_str:
+                print(f" -> El archivo Legacy ya está actualizado ({fecha_remota}). NO se generará de nuevo.")
+                return False
+            else:
+                print(f" -> El archivo Legacy es antiguo ({fecha_remota}). Se generará uno nuevo para {hoy_str}.")
+                return True
+        elif resp.status_code == 404:
+            print(" -> El archivo Legacy no existe aún. Se generará.")
+            return True
+        else:
+            print(f" -> Advertencia: Respuesta {resp.status_code}. Se forzará generación.")
+            return True
+    except Exception as e:
+        print(f" -> Error verificando Legacy: {e}. Se generará por seguridad.")
+        return True
+
+# --- 3. FUNCIÓN PRINCIPAL GEMINI ---
 def obtener_ranking_eventos(lista_eventos):
     if not GEMINI_API_KEY:
-        print("ERROR: No se encontró la API Key de Gemini. No se puede continuar.")
+        print("ERROR: No API Key.")
         return None
 
-    print("Contactando a la IA de Gemini para obtener candidatos...")
+    print("Contactando a Gemini con Prompt para México/Clase Media-Alta/PPV...")
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
         cst_offset = timezone(timedelta(hours=-6))
-        hora_actual_cst = datetime.now(cst_offset)
-        # Formato claro con AM/PM para facilitar la comparación a la IA
-        hora_formateada_cst = hora_actual_cst.strftime('%A, %d de %B de %Y - %I:%M %p (Hora Centro México)')
+        hora_actual = datetime.now(cst_offset).strftime('%A, %d de %B - %I:%M %p (CDMX)')
         
+        # Construcción de la lista para análisis
+        # AHORA INCLUIMOS CANALES PARA DETECTAR PPV
         eventos_para_analizar = []
         for evento in lista_eventos:
             for partido in evento.get("partidos", []):
-                # Incluimos el evento principal en el texto para que la IA sepa la liga
-                info_completa = f"{evento.get('evento_principal', '')}: {partido.get('descripcion', '')} {partido.get('horarios', '')}"
-                eventos_para_analizar.append(info_completa.strip())
+                canales_str = ", ".join(partido.get('canales', []))
+                # Formato rico en datos para la IA
+                info = (f"LIGA: {evento.get('evento_principal', '')} | "
+                        f"PARTIDO: {partido.get('descripcion', '')} | "
+                        f"HORA: {partido.get('horarios', '')} | "
+                        f"CANALES: {canales_str}")
+                eventos_para_analizar.append(info.strip())
         
-        lista_texto_plano = "\n".join(filter(None, set(eventos_para_analizar)))
-        if not lista_texto_plano:
-            print("No se encontraron eventos para analizar.")
+        lista_texto = "\n".join(eventos_para_analizar)
+        if not lista_texto:
             return []
 
-        # --- PROMPT REFORZADO (TIEMPO Y VARIEDAD) ---
+        # --- PROMPT ACTUALIZADO ---
         prompt = f"""
-        Rol
-        Actúa como un curador senior de eventos deportivos.
+        Rol: Curador experto de deportes para **MÉXICO**.
+        Audiencia: **Clase Media-Alta** (Alto poder adquisitivo).
         
-        CONTEXTO TEMPORAL CRÍTICO
-        ⚠️ **FECHA Y HORA ACTUAL (CDMX/Centro): {hora_formateada_cst}** ⚠️
+        Contexto Temporal: {hora_actual}.
         
-        OBJETIVO
-        Analiza la lista y selecciona los 40 eventos más relevantes VIGENTES (que se estén jugando ahora o vayan a empezar pronto).
+        TU MISIÓN:
+        Selecciona los **40 eventos más atractivos** de la lista para nuestra audiencia.
         
-        ⛔ REGLA CERO: FILTRO DE TIEMPO (ESTRICTO)
-        - TU PRIMERA TAREA ES DESCARTAR LO QUE YA TERMINÓ.
-        - Ejemplo: Si la hora actual es 6:00 PM y el partido dice "2:00 PM Centro", **ESTÁ TERMINADO. NO LO INCLUYAS.**
-        - Ignora partidos finalizados, por más importantes que hayan sido (ej. Champions League de la tarde si ya es de noche).
-        - Prioriza eventos **EN VIVO** o **POR COMENZAR**.
-
-        REGLAS DE SELECCIÓN
-        1. **JERARQUÍA:**
-           - NIVEL 1 (PREMIUM): Finales, Clásicos, Liguilla Liga MX, Champions (solo si es horario vigente), Selección Mexicana.
-           - NIVEL 2 (TOP): NBA, NFL, MLB, Premier League.
+        CRITERIOS DE SELECCIÓN (ESTRICTOS):
         
-        2. **VARIEDAD OBLIGATORIA:**
-           - No quiero una lista monotemática. Mezcla deportes.
+        1. 💰 **FACTOR PPV (PRIORIDAD SUPREMA):**
+           - Analiza los CANALES. Si ves **"PPV"**, "Pago por Evento", "Box Azteca" (estelar), "UFC", o exclusivas premium, **DALE PRIORIDAD MÁXIMA**.
+           - Esta audiencia paga por ver: Boxeo (Canelo), UFC, F1 (Checo Pérez), Golf, Tenis (Grand Slams).
+           
+        2. 🇲🇽 **ENFOQUE 100% MÉXICO:**
+           - Prioridad: **Liga MX** (Equipos grandes: América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey).
+           - Prioridad: **Selección Mexicana**.
+           - Prioridad: **Mexicanos en Europa/USA** (Edson Álvarez, Santi Giménez, Jaime Jaquez NBA, etc.).
+           
+        3. 🏆 **EVENTOS PREMIUM INTERNACIONALES:**
+           - NFL (Primetime/Playoffs - Cowboys, Steelers, 49ers, Chiefs).
+           - Champions League (Real Madrid, Barcelona).
+           - NBA (Lakers, Warriors, Celtics).
+           - MLB (Yankees, Dodgers, Astros).
+           
+        4. 🕒 **FILTRO DE TIEMPO (VIGENCIA):**
+           - Compara la hora del evento con la hora actual ({hora_actual}).
+           - **DESCARTA** lo que ya terminó. Queremos contenido para ver AHORA o más tarde hoy.
+           
+        5. ⚖️ **VARIEDAD:**
+           - No llenes la lista con una sola liga.
         
-        FORMATO DE SALIDA
-        - Devuelve exactamente 40 líneas.
-        - Solo el texto: "Equipo A vs Equipo B"
-        - Sin numeración, sin viñetas.
+        SALIDA:
+        - Lista de 40 líneas exactas.
+        - Formato simple: "Equipo A vs Equipo B" (o "Evento - Protagonista").
+        - Sin numeración, ni viñetas.
 
         LISTA A ANALIZAR:
-        {lista_texto_plano}
+        {lista_texto}
         """
 
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.3
-            )
+            config=types.GenerateContentConfig(temperature=0.3)
         )
         
         if response.text:
-            ranking_limpio = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
-            print(f"Candidatos recibidos de Gemini: {len(ranking_limpio)}")
-            return ranking_limpio
-        else:
-            print("Gemini devolvió una respuesta vacía.")
-            return []
+            return [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
+        return []
 
     except Exception as e:
-        print(f"ERROR al contactar con Gemini: {e}. Omitiendo el ranking.")
+        print(f"Error Gemini: {e}")
         return None
 
-# --- 3. FUNCIÓN PRINCIPAL ---
+# --- 4. FUNCIÓN PRINCIPAL ---
 def main():
-    print(f"Iniciando proceso de ranking variado...")
+    print(f"--- Iniciando Ranker Multi-Archivo ---")
     
-    fecha_actualizacion_iso = datetime.now(MEXICO_TZ).isoformat()
+    fecha_actual_dt = datetime.now(MEXICO_TZ)
+    fecha_iso = fecha_actual_dt.isoformat()
+    hoy_str = fecha_actual_dt.strftime('%Y-%m-%d')
+    
+    # 1. Determinar si generamos el Legacy
+    generar_legacy = verificar_necesidad_legacy(hoy_str)
     
     try:
-        print(f"1. Descargando {URL_JSON_FUENTE}...")
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        respuesta = requests.get(URL_JSON_FUENTE, headers=headers, params={'v': datetime.now().timestamp()}, timeout=20)
-        respuesta.raise_for_status()
-        datos = respuesta.json()
+        print(f"Descargando {URL_JSON_FUENTE}...")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        resp = requests.get(URL_JSON_FUENTE, headers=headers, params={'v': datetime.now().timestamp()}, timeout=20)
+        resp.raise_for_status()
+        datos = resp.json()
         
-        fecha_guia_str = datos.get("fecha_guia")
-        if not fecha_guia_str:
-            print("ERROR: No se encontró la etiqueta 'fecha_guia'.")
-            return
-
-        hoy_mexico_str = datetime.now(MEXICO_TZ).strftime('%Y-%m-%d')
-        if fecha_guia_str != hoy_mexico_str:
-            print(f"ADVERTENCIA: Fecha guía ({fecha_guia_str}) != Hoy ({hoy_mexico_str}). Cancelando.")
+        # Validación de fecha de la fuente
+        if datos.get("fecha_guia") != hoy_str:
+            print(f"ERROR: La fecha de la guía ({datos.get('fecha_guia')}) no es de hoy ({hoy_str}). Abortando.")
             return
         
-        lista_eventos_original = datos.get("eventos", [])
-        if not lista_eventos_original:
-            raise ValueError("El JSON está vacío.")
+        lista_original = datos.get("eventos", [])
+        if not lista_original: raise ValueError("JSON vacío.")
         
     except Exception as e:
-        print(f"ERROR FATAL descarga JSON: {e}")
+        print(f"Error fatal leyendo fuente: {e}")
         return
 
-    ranking_crudo = obtener_ranking_eventos(lista_eventos_original)
+    # 2. Obtener Ranking Maestro de IA
+    ranking_ia = obtener_ranking_eventos(lista_original)
+    
+    if not ranking_ia:
+        print("Fallo en IA. No se generan archivos.")
+        return
 
-    # Listas para el proceso de filtrado
+    # 3. Procesamiento y Filtrado (Variedad)
     eventos_seleccionados = []
-    eventos_reserva = [] 
-    conteo_por_liga = {}
-
-    if ranking_crudo:
-        print("2. Procesando candidatos y aplicando FILTRO DE VARIEDAD TOP 3...")
-        palabras_prohibidas = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
-        
-        candidatos_obj = []
-        descripciones_vistas = set()
-
-        # Mapeo de texto Gemini a objetos originales
-        for desc_gemini in ranking_crudo:
-            encontrado = False
-            for evento in lista_eventos_original:
-                for partido in evento.get("partidos", []):
-                    desc_partido = partido.get("descripcion", "")
-                    if desc_partido and (desc_partido in desc_gemini or desc_gemini in desc_partido):
-                        if desc_partido not in descripciones_vistas:
-                            candidatos_obj.append((evento, partido))
-                            descripciones_vistas.add(desc_partido)
-                            encontrado = True
-                        break 
-                if encontrado: break
-
-        # SELECCIÓN CON REGLAS ESTRICTAS
-        META_FINAL = 20 # Definido en la configuración o aquí localmente
-        
-        for evento, partido in candidatos_obj:
-            if len(eventos_seleccionados) >= META_FINAL:
-                break
+    eventos_reserva = []
+    conteo_liga = {}
+    
+    # Mapeo IA -> Objetos
+    candidatos_obj = []
+    vistos = set()
+    
+    # Búsqueda un poco más robusta para coincidir texto IA con JSON
+    for desc_ia in ranking_ia:
+        encontrado = False
+        for evento in lista_original:
+            for partido in evento.get("partidos", []):
+                # Normalizamos un poco para comparar
+                d_orig = partido.get("descripcion", "")
+                if d_orig and (d_orig in desc_ia or desc_ia in d_orig):
+                    if d_orig not in vistos:
+                        candidatos_obj.append((evento, partido))
+                        vistos.add(d_orig)
+                        encontrado = True
+                    break
+            if encontrado: break
             
-            nombre_liga = evento.get("evento_principal", "Otros")
-            if any(keyword in nombre_liga for keyword in palabras_prohibidas):
-                continue
+    # Filtro de Variedad (Top 2 por liga inicial)
+    # Meta: Tener al menos 20 eventos de calidad
+    palabras_off = ["Femenil", "WNBA", "NWSL", "Femenino", "Womens"]
+    
+    for evento, partido in candidatos_obj:
+        if len(eventos_seleccionados) >= 40: # Límite de seguridad interno
+            break
+        
+        nombre_liga = evento.get("evento_principal", "Otros")
+        if any(w in nombre_liga for w in palabras_off): continue
 
-            liga_key = nombre_liga.split()[0] if nombre_liga else "Otros"
-            conteo_actual = conteo_por_liga.get(liga_key, 0)
+        key = nombre_liga.split()[0] if nombre_liga else "Otros"
+        count = conteo_liga.get(key, 0)
+        
+        # Regla Top 3 (Web/Legacy): Diversidad máxima (1 por liga en el podio)
+        if len(eventos_seleccionados) < 3 and count >= 1:
+            eventos_reserva.append((evento, partido, nombre_liga))
+            continue
             
-            # --- REGLA CRÍTICA PARA EL TOP 3 ---
-            # Si estamos llenando los espacios 1, 2 o 3 (índices 0, 1, 2)
-            # NO PERMITIMOS REPETIR LIGA. Límite = 1.
-            if len(eventos_seleccionados) < 3 and conteo_actual >= 1:
-                # Ya hay uno de esta liga en el Top 3. Lo mandamos a reserva para usarlo después (puesto 4+)
-                eventos_reserva.append({
-                    "evento_principal": nombre_liga,
-                    "detalle_evento": evento.get("detalle_evento", ""),
-                    "partidos": [partido]
-                })
-                continue 
+        if count < MAX_EVENTOS_POR_LIGA:
+            eventos_seleccionados.append((evento, partido, nombre_liga))
+            conteo_liga[key] = count + 1
+        else:
+            eventos_reserva.append((evento, partido, nombre_liga))
 
-            # --- REGLA GENERAL PARA EL RESTO ---
-            if conteo_actual < MAX_EVENTOS_POR_LIGA:
-                eventos_seleccionados.append({
-                    "evento_principal": nombre_liga,
-                    "detalle_evento": evento.get("detalle_evento", ""),
-                    "partidos": [partido]
-                })
-                conteo_por_liga[liga_key] = conteo_actual + 1
-            else:
-                eventos_reserva.append({
-                    "evento_principal": nombre_liga,
-                    "detalle_evento": evento.get("detalle_evento", ""),
-                    "partidos": [partido]
-                })
+    # Relleno para llegar a 20 (Meta Roku)
+    if len(eventos_seleccionados) < 20 and eventos_reserva:
+        faltan = 20 - len(eventos_seleccionados)
+        eventos_seleccionados.extend(eventos_reserva[:faltan])
 
-        # RELLENO SI FALTAN
-        faltantes = META_FINAL - len(eventos_seleccionados)
-        if faltantes > 0 and eventos_reserva:
-            print(f"   -> Rellenando {faltantes} espacios con reservas...")
-            relleno = eventos_reserva[:faltantes]
-            eventos_seleccionados.extend(relleno)
+    print(f"Total eventos procesados: {len(eventos_seleccionados)}")
+
+    # --- 4. GENERACIÓN DE ARCHIVOS JSON ---
+    archivos_a_subir = []
+
+    # A. EVENTOS-RELEVANTES (Legacy - Top 5 - Solo 1 vez al día)
+    if generar_legacy:
+        top_5 = []
+        for ev, pt, nom in eventos_seleccionados[:5]:
+            top_5.append({
+                "evento_principal": nom,
+                "detalle_evento": ev.get("detalle_evento", ""),
+                "partidos": [pt]
+            })
         
-        print(f"Ranking Final Generado (Total: {len(eventos_seleccionados)}):")
-        for i, ev in enumerate(eventos_seleccionados, 1):
-            print(f" {i}. {ev['evento_principal']}: {ev['partidos'][0]['descripcion']}")
-
-    # --- 3. GENERACIÓN DE ARCHIVOS ---
-
-    # A. Archivo Legacy (Top 3 estricto y variado)
-    eventos_legacy = eventos_seleccionados[:3]
-    json_legacy = {
-        "fecha_actualizacion": fecha_actualizacion_iso,
-        "fecha_guia": fecha_guia_str,
-        "eventos_relevantes": eventos_legacy
-    }
-
-    # B. Archivo Roku (Top 20)
-    eventos_roku_limpios = []
-    for evento in eventos_seleccionados:
-        partido_orig = evento["partidos"][0]
-        
-        evento_nuevo = {
-            "evento_principal": limpiar_texto_roku(evento["evento_principal"]),
-            "detalle_evento": limpiar_texto_roku(evento["detalle_evento"]),
-            "partidos": [{
-                "detalle_partido": limpiar_texto_roku(partido_orig.get("detalle_partido", "")),
-                "descripcion": limpiar_texto_roku(partido_orig.get("descripcion", "")),
-                "horarios": limpiar_texto_roku(partido_orig.get("horarios", "")),
-                "canales": [limpiar_texto_roku(c) for c in partido_orig.get("canales", [])],
-                "competidores": [limpiar_texto_roku(c) for c in partido_orig.get("competidores", [])]
-            }]
+        json_legacy = {
+            "fecha_actualizacion": fecha_iso,
+            "fecha_guia": hoy_str,
+            "eventos_relevantes": top_5
         }
-        eventos_roku_limpios.append(evento_nuevo)
+        print(f"Generando {ARCHIVO_LEGACY} (Top 5)...")
+        with open(ARCHIVO_LEGACY, 'w', encoding='utf-8') as f:
+            json.dump(json_legacy, f, indent=4, ensure_ascii=False)
+        archivos_a_subir.append(ARCHIVO_LEGACY)
+    else:
+        print(f"Saltando {ARCHIVO_LEGACY} (Ya existe para hoy).")
+
+    # B. EVENTOS-DESTACADOS-ROKU (Roku - Top 20 - Limpio - Recurrente)
+    top_20_roku = []
+    # Aseguramos tener hasta 20 (o los que haya)
+    limit_roku = min(len(eventos_seleccionados), 20)
+    
+    for ev, pt, nom in eventos_seleccionados[:limit_roku]:
+        # Limpieza profunda
+        pt_clean = copy.deepcopy(pt)
+        pt_clean["detalle_partido"] = limpiar_texto_roku(pt.get("detalle_partido", ""))
+        pt_clean["descripcion"] = limpiar_texto_roku(pt.get("descripcion", ""))
+        pt_clean["horarios"] = limpiar_texto_roku(pt.get("horarios", ""))
+        pt_clean["canales"] = [limpiar_texto_roku(c) for c in pt.get("canales", [])]
+        pt_clean["competidores"] = [limpiar_texto_roku(c) for c in pt.get("competidores", [])]
+
+        top_20_roku.append({
+            "evento_principal": limpiar_texto_roku(nom),
+            "detalle_evento": limpiar_texto_roku(ev.get("detalle_evento", "")),
+            "partidos": [pt_clean]
+        })
 
     json_roku = {
-        "fecha_actualizacion": fecha_actualizacion_iso,
-        "fecha_guia": fecha_guia_str,
-        "eventos_relevantes": eventos_roku_limpios
+        "fecha_actualizacion": fecha_iso,
+        "fecha_guia": hoy_str,
+        "eventos_relevantes": top_20_roku
     }
-
-    # --- 4. GUARDADO Y SUBIDA ---
-    
-    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_LEGACY}...")
-    with open(NOMBRE_ARCHIVO_SALIDA_LEGACY, 'w', encoding='utf-8') as f:
-        json.dump(json_legacy, f, indent=4, ensure_ascii=False)
-
-    print(f"Guardando {NOMBRE_ARCHIVO_SALIDA_ROKU}...")
-    with open(NOMBRE_ARCHIVO_SALIDA_ROKU, 'w', encoding='utf-8') as f:
+    print(f"Generando {ARCHIVO_ROKU} (Top 20 Limpio)...")
+    with open(ARCHIVO_ROKU, 'w', encoding='utf-8') as f:
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
+    archivos_a_subir.append(ARCHIVO_ROKU)
 
+    # C. EVENTOS-IMPORTANTES-WEB (Nuevo - Top 3 - Emojis - Recurrente)
+    top_3_web = []
+    for ev, pt, nom in eventos_seleccionados[:3]:
+        top_3_web.append({
+            "evento_principal": nom,
+            "detalle_evento": ev.get("detalle_evento", ""),
+            "partidos": [pt]
+        })
+
+    json_web = {
+        "fecha_actualizacion": fecha_iso,
+        "fecha_guia": hoy_str,
+        "eventos_relevantes": top_3_web
+    }
+    print(f"Generando {ARCHIVO_WEB} (Top 3 Web)...")
+    with open(ARCHIVO_WEB, 'w', encoding='utf-8') as f:
+        json.dump(json_web, f, indent=4, ensure_ascii=False)
+    archivos_a_subir.append(ARCHIVO_WEB)
+
+    # --- 5. SUBIDA FTP ---
     if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
-        print("ADVERTENCIA: Faltan variables FTP.")
+        print("No FTP config. Bye.")
         return
-    
-    print("5. Subiendo archivos al servidor FTP...")
-    archivos_a_subir = [NOMBRE_ARCHIVO_SALIDA_LEGACY, NOMBRE_ARCHIVO_SALIDA_ROKU]
-    
+
+    print("Subiendo archivos a FTP...")
     try:
         with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
             ftp.set_pasv(True)
             ftp.cwd(RUTA_REMOTA_FTP)
             for archivo in archivos_a_subir:
                 with open(archivo, 'rb') as file:
-                    print(f"Subiendo '{archivo}'...")
+                    print(f" -> Subiendo {archivo}...")
                     ftp.storbinary(f'STOR {archivo}', file)
-            print("¡Subida completada!")
+            print("¡Subida Completada!")
     except Exception as e:
-        print(f"ERROR FATAL FTP: {e}")
+        print(f"Error FTP: {e}")
 
 if __name__ == "__main__":
     main()
-    print("--- Proceso finalizado ---")
