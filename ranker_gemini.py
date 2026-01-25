@@ -170,7 +170,7 @@ def main():
     fecha_iso = fecha_actual_dt.isoformat()
     hoy_str = fecha_actual_dt.strftime('%Y-%m-%d')
     
-    # --- LOGICA DE FIN DE SEMANA (NUEVO) ---
+    # --- LOGICA DE FIN DE SEMANA ---
     # weekday(): 0=Lunes ... 4=Viernes, 5=Sábado, 6=Domingo
     dia_semana = fecha_actual_dt.weekday()
     if dia_semana >= 5:
@@ -286,17 +286,20 @@ def main():
     else:
         print(f"Saltando {ARCHIVO_LEGACY} (Ya existe para hoy).")
 
-    # B. EVENTOS-DESTACADOS-ROKU (Top 20 - Limpio)
+    # B. EVENTOS-DESTACADOS-ROKU (Roku - Top 20 - Limpio - Recurrente)
     top_20_roku = []
     limit_roku = min(len(eventos_seleccionados), 20)
     
     for ev, pt, nom in eventos_seleccionados[:limit_roku]:
+        # Limpieza profunda
         pt_clean = copy.deepcopy(pt)
         pt_clean["detalle_partido"] = limpiar_texto_roku(pt.get("detalle_partido", ""))
         pt_clean["descripcion"] = limpiar_texto_roku(pt.get("descripcion", ""))
         pt_clean["horarios"] = limpiar_texto_roku(pt.get("horarios", ""))
         pt_clean["canales"] = [limpiar_texto_roku(c) for c in pt.get("canales", [])]
         pt_clean["competidores"] = [limpiar_texto_roku(c) for c in pt.get("competidores", [])]
+        # CORRECCIÓN APLICADA AQUÍ: Limpiar también el organizador
+        pt_clean["organizador"] = limpiar_texto_roku(pt.get("organizador", ""))
 
         top_20_roku.append({
             "evento_principal": limpiar_texto_roku(nom),
@@ -314,9 +317,8 @@ def main():
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_ROKU)
 
-    # C. EVENTOS-IMPORTANTES-WEB (Top Dinámico: 3 o 5)
+    # C. EVENTOS-IMPORTANTES-WEB (Nuevo - Top Dinámico - Emojis - Recurrente)
     top_web = []
-    # Usamos la variable limit_web calculada al inicio
     limit_real_web = min(len(eventos_seleccionados), limit_web)
 
     for ev, pt, nom in eventos_seleccionados[:limit_real_web]:
