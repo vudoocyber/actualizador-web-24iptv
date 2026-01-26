@@ -83,7 +83,7 @@ def obtener_ranking_eventos(lista_eventos):
         print("ERROR: No API Key.")
         return None
 
-    print("Contactando a Gemini con Prompt para México/Clase Media-Alta/PPV...")
+    print("Contactando a Gemini con Prompt MEJORADO (Premium/Vip)...")
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
@@ -105,44 +105,51 @@ def obtener_ranking_eventos(lista_eventos):
         if not lista_texto:
             return []
 
-        # --- PROMPT ---
+        # --- PROMPT REFINADO PARA CLASE MEDIA/ALTA Y EVENTOS VIP ---
         prompt = f"""
         Rol: Curador experto de deportes para **MÉXICO**.
-        Audiencia: **Clase Media-Alta** (Alto poder adquisitivo).
+        Audiencia: **Clase Media-Alta y Alta** (Gustos Premium).
         
         Contexto Temporal: {hora_actual}.
         
         TU MISIÓN:
-        Selecciona los **40 eventos más atractivos** de la lista para nuestra audiencia.
+        Selecciona los **40 eventos más importantes DEL DÍA COMPLETO**.
         
-        CRITERIOS DE SELECCIÓN (ESTRICTOS):
+        ⚠️ INSTRUCCIÓN CRÍTICA DE JERARQUÍA:
+        La **IMPORTANCIA** del evento supera a la **HORA**. 
+        Un partido de NBA o Grand Slam en la noche VALE MÁS que un partido de liga europea regular en la mañana.
+        No descartes eventos nocturnos solo porque faltan horas para que empiecen.
         
-        1. 💰 **FACTOR PPV (PRIORIDAD SUPREMA):**
-           - Analiza los CANALES. Si ves **"PPV"**, "Pago por Evento", "Box Azteca", "UFC", o exclusivas premium, **DALE PRIORIDAD MÁXIMA**.
-           - Esta audiencia paga por ver: Boxeo (Canelo), UFC, F1 (Checo Pérez), Golf, Tenis.
-           
-        2. 🇲🇽 **ENFOQUE 100% MÉXICO:**
-           - Prioridad: **Liga MX** (Equipos grandes: América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey).
-           - Prioridad: **Selección Mexicana**.
-           - Prioridad: **Mexicanos en Europa/USA**.
-           
-        3. 🏆 **EVENTOS PREMIUM INTERNACIONALES:**
-           - NFL (Primetime/Playoffs).
-           - Champions League (Real Madrid, Barcelona).
-           - NBA (Lakers, Warriors, Celtics).
-           - MLB (Yankees, Dodgers, Astros).
-           
-        4. 🕒 **FILTRO DE TIEMPO (VIGENCIA):**
-           - Compara la hora del evento con la hora actual ({hora_actual}).
-           - **DESCARTA** lo que ya terminó. Queremos contenido para ver AHORA o más tarde hoy.
-           
-        5. ⚖️ **VARIEDAD:**
-           - No llenes la lista con una sola liga.
+        CRITERIOS DE SELECCIÓN (EN ORDEN DE PRIORIDAD):
         
+        1. 💎 **JOYAS PREMIUM & PPV (OBLIGATORIO INCLUIR SI EXISTEN):**
+           - **TENIS:** Grand Slams (Abierto de Australia / Australian Open), Finales ATP.
+           - **GOLF:** PGA Tour, LIV Golf, Majors.
+           - **COMBATE:** PPV, Boxeo (Canelo, Benavidez), UFC Numerado.
+           - **MOTOR:** F1 (Cualquier sesión de GP).
+           
+        2. 🏀 **DEPORTES AMERICANOS (ALTO INTERÉS):**
+           - **NBA:** Lakers, Warriors, Celtics, Heat, Mavericks (O cualquier partido parejo/Playoffs).
+           - **NFL:** Playoffs, Super Bowl, Prime Time (Sunday/Monday Night).
+           - **MLB:** Dodgers, Yankees, Astros (Playoffs o Clásicos).
+           
+        3. 🇲🇽 **FÚTBOL RELEVANTE MÉXICO:**
+           - **Liga MX:** América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey.
+           - **Selección Mexicana**.
+           
+        4. ⚽ **FÚTBOL INTERNACIONAL TOP (SOLO LO MEJOR):**
+           - Champions League (Fases finales).
+           - Partidos "Clásicos" de Europa (Real Madrid vs Barcelona, City vs Liverpool).
+           - *Nota:* Un partido regular de la Serie A o Bundesliga NO supera a la NBA o Grand Slam.
+
+        5. 🕒 **REGLA DE VIGENCIA:**
+           - Solo descarta lo que **YA TERMINÓ** definitivamente.
+           - Si el evento es en la noche, ¡INCLÚYELO EN EL TOP!
+
         SALIDA:
         - Lista de 40 líneas exactas.
         - Formato simple: "Equipo A vs Equipo B" (o "Evento - Protagonista").
-        - Sin numeración, ni viñetas.
+        - Ordena por **RELEVANCIA**, no por hora de inicio.
 
         LISTA A ANALIZAR:
         {lista_texto}
@@ -171,7 +178,6 @@ def main():
     hoy_str = fecha_actual_dt.strftime('%Y-%m-%d')
     
     # --- LOGICA DE FIN DE SEMANA ---
-    # weekday(): 0=Lunes ... 4=Viernes, 5=Sábado, 6=Domingo
     dia_semana = fecha_actual_dt.weekday()
     if dia_semana >= 5:
         limit_web = 5
@@ -286,19 +292,17 @@ def main():
     else:
         print(f"Saltando {ARCHIVO_LEGACY} (Ya existe para hoy).")
 
-    # B. EVENTOS-DESTACADOS-ROKU (Roku - Top 20 - Limpio - Recurrente)
+    # B. EVENTOS-DESTACADOS-ROKU (Top 20 - Limpio)
     top_20_roku = []
     limit_roku = min(len(eventos_seleccionados), 20)
     
     for ev, pt, nom in eventos_seleccionados[:limit_roku]:
-        # Limpieza profunda
         pt_clean = copy.deepcopy(pt)
         pt_clean["detalle_partido"] = limpiar_texto_roku(pt.get("detalle_partido", ""))
         pt_clean["descripcion"] = limpiar_texto_roku(pt.get("descripcion", ""))
         pt_clean["horarios"] = limpiar_texto_roku(pt.get("horarios", ""))
         pt_clean["canales"] = [limpiar_texto_roku(c) for c in pt.get("canales", [])]
         pt_clean["competidores"] = [limpiar_texto_roku(c) for c in pt.get("competidores", [])]
-        # CORRECCIÓN APLICADA AQUÍ: Limpiar también el organizador
         pt_clean["organizador"] = limpiar_texto_roku(pt.get("organizador", ""))
 
         top_20_roku.append({
@@ -317,7 +321,7 @@ def main():
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_ROKU)
 
-    # C. EVENTOS-IMPORTANTES-WEB (Nuevo - Top Dinámico - Emojis - Recurrente)
+    # C. EVENTOS-IMPORTANTES-WEB (Top Dinámico)
     top_web = []
     limit_real_web = min(len(eventos_seleccionados), limit_web)
 
@@ -338,23 +342,4 @@ def main():
         json.dump(json_web, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_WEB)
 
-    # --- 5. SUBIDA FTP ---
-    if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
-        print("No FTP config. Bye.")
-        return
-
-    print("Subiendo archivos a FTP...")
-    try:
-        with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
-            ftp.set_pasv(True)
-            ftp.cwd(RUTA_REMOTA_FTP)
-            for archivo in archivos_a_subir:
-                with open(archivo, 'rb') as file:
-                    print(f" -> Subiendo {archivo}...")
-                    ftp.storbinary(f'STOR {archivo}', file)
-            print("¡Subida Completada!")
-    except Exception as e:
-        print(f"Error FTP: {e}")
-
-if __name__ == "__main__":
-    main()
+    # --- 5. SUB
