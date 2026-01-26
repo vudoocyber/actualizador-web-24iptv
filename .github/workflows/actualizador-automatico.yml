@@ -23,7 +23,7 @@ jobs:
           # Eliminamos google-generativeai para ahorrar peso y tiempo
           pip install --upgrade requests beautifulsoup4 pytz packaging
 
-      # --- Verificación de fecha con Headers (Protección contra 403 y Sobreescritura) ---
+      # --- Verificación de fecha con Headers REFORZADOS (Corrección Error 403) ---
       - name: Verificar si la guia ya esta actualizada
         id: check_date
         run: |
@@ -36,13 +36,18 @@ jobs:
           try:
               url = 'https://24hometv.xyz/events.json'
               
+              # HEADERS COMPLETOS PARA SIMULAR UN NAVEGADOR REAL
               headers = {
                   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Accept': 'application/json'
+                  'Accept': 'text/html,application/xhtml+xml,application/json,xml;q=0.9,*/*;q=0.8',
+                  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+                  'Referer': 'https://24hometv.xyz/',
+                  'Connection': 'keep-alive',
+                  'Upgrade-Insecure-Requests': '1'
               }
               
               print(f'Consultando: {url}')
-              response = requests.get(url, headers=headers, params={'nocache': datetime.datetime.now().timestamp()}, timeout=10)
+              response = requests.get(url, headers=headers, params={'nocache': datetime.datetime.now().timestamp()}, timeout=15)
               
               should_run = 'true'
               
