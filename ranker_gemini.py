@@ -29,6 +29,15 @@ MEXICO_TZ = pytz.timezone('America/Mexico_City')
 MAX_EVENTOS_POR_LIGA = 2  
 META_CANDIDATOS_IA = 50   # Pedimos muchos para poder filtrar bien
 
+# --- HEADERS DE NAVEGADOR (ANTI-BLOQUEO 403) ---
+HEADERS_SEGURIDAD = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/json,xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Referer': 'https://24hometv.xyz/',
+    'Connection': 'keep-alive'
+}
+
 # --- 2. FUNCIONES AUXILIARES ---
 
 def limpiar_texto_roku(texto):
@@ -50,13 +59,11 @@ def limpiar_texto_roku(texto):
 def verificar_necesidad_legacy(hoy_str):
     """
     Verifica si el archivo legacy en el servidor ya tiene la fecha de hoy.
-    Retorna True si DEBEMOS generar uno nuevo.
-    Retorna False si el online ya es de hoy.
     """
     print(f"Verificando estado de '{ARCHIVO_LEGACY}' en servidor...")
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(URL_JSON_LEGACY_CHECK, headers=headers, params={'v': datetime.now().timestamp()}, timeout=10)
+        # USAMOS LOS HEADERS COMPLETOS AQUÍ
+        resp = requests.get(URL_JSON_LEGACY_CHECK, headers=HEADERS_SEGURIDAD, params={'v': datetime.now().timestamp()}, timeout=15)
         
         if resp.status_code == 200:
             datos = resp.json()
@@ -191,8 +198,8 @@ def main():
     
     try:
         print(f"Descargando {URL_JSON_FUENTE}...")
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        resp = requests.get(URL_JSON_FUENTE, headers=headers, params={'v': datetime.now().timestamp()}, timeout=20)
+        # USAMOS LOS HEADERS COMPLETOS AQUÍ TAMBIÉN
+        resp = requests.get(URL_JSON_FUENTE, headers=HEADERS_SEGURIDAD, params={'v': datetime.now().timestamp()}, timeout=20)
         resp.raise_for_status()
         datos = resp.json()
         
@@ -342,4 +349,23 @@ def main():
         json.dump(json_web, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_WEB)
 
-    # --- 5. SUB
+    # --- 5. SUBIDA FTP ---
+    if not all([FTP_HOST, FTP_USUARIO, FTP_CONTRASENA]):
+        print("No FTP config. Bye.")
+        return
+
+    print("Subiendo archivos a FTP...")
+    try:
+        with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
+            ftp.set_pasv(True)
+            ftp.cwd(RUTA_REMOTA_FTP)
+            for archivo in archivos_a_subir:
+                with open(archivo, 'rb') as file:
+                    print(f" -> Subiendo {archivo}...")
+                    ftp.storbinary(f'STOR {archivo}', file)
+            print("¡Subida Completada!")
+    except Exception as e:
+        print(f"Error FTP: {e}")
+
+if __name__ == "__main__":
+    main()
