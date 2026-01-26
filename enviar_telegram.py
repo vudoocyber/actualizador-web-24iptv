@@ -2,27 +2,36 @@ import requests
 import json
 import os
 from datetime import datetime
-import pytz # Usamos pytz para consistencia con los otros scripts
+import pytz 
 
 # --- CONFIGURACIÓN Y SECRETS ---
-URL_JSON_FUENTE = "https://24hometv.xyz/events.json" # URL del JSON principal
+URL_JSON_FUENTE = "https://24hometv.xyz/events.json" 
 URL_MENSAJE_TXT = os.environ.get("URL_MENSAJE_TELEGRAM_TXT") 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 MEXICO_TZ = pytz.timezone("America/Mexico_City") 
 
+# --- HEADERS ANTI-BLOQUEO (CRÍTICO) ---
+# Sin esto, el servidor devuelve error 403
+HEADERS_SEGURIDAD = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/json,xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Referer': 'https://24hometv.xyz/',
+    'Connection': 'keep-alive'
+}
 
 def obtener_mensaje_web(url):
     """
     Descarga el contenido del archivo de texto plano.
-    La validación de fecha ya no se hace aquí.
     """
     if not url:
         print("Error: La URL del mensaje TXT no está configurada.")
         return None
         
     try:
-        respuesta = requests.get(url)
+        # AGREGAMOS HEADERS AQUÍ
+        respuesta = requests.get(url, headers=HEADERS_SEGURIDAD, timeout=20)
         respuesta.raise_for_status()
         respuesta.encoding = 'utf-8' 
         return respuesta.text.strip()
@@ -44,17 +53,22 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     payload = {
         'chat_id': chat_id,
         'text': mensaje,
-        'parse_mode': 'Markdown' 
+        'parse_mode': 'Markdown',
+        'disable_web_page_preview': True # Opcional: evita que genere vistas previas de enlaces
     }
     
     try:
-        respuesta = requests.post(url_api, json=payload) 
+        # Telegram no necesita los headers de seguridad del servidor web, pero sí un timeout
+        respuesta = requests.post(url_api, json=payload, timeout=20) 
         respuesta.raise_for_status()
         print(f"Mensaje enviado a Telegram con éxito.")
         return True
     except requests.exceptions.RequestException as e:
         print(f"Error al enviar el mensaje a Telegram: {e}")
-        print(f"Respuesta del servidor: {respuesta.text}")
+        try:
+            print(f"Respuesta del servidor: {respuesta.text}")
+        except:
+            pass
         return False
 
 def main():
@@ -62,7 +76,8 @@ def main():
     
     try:
         print(f"1. Descargando {URL_JSON_FUENTE} para validar fecha...")
-        respuesta = requests.get(URL_JSON_FUENTE, params={'v': datetime.now().timestamp()}, timeout=20)
+        # AGREGAMOS HEADERS AQUÍ TAMBIÉN
+        respuesta = requests.get(URL_JSON_FUENTE, headers=HEADERS_SEGURIDAD, params={'v': datetime.now().timestamp()}, timeout=20)
         respuesta.raise_for_status()
         datos = respuesta.json()
         
