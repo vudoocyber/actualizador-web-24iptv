@@ -17,14 +17,21 @@ MESES_ESPANOL = {
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") # Chat público
 URL_VALIDACION = os.environ.get("URL_EVENTOS_JSON") 
-URL_RANKING = os.environ.get("URL_RANKING_JSON")     
-TELEGRAM_ALERT_CHAT_ID = os.environ.get("TELEGRAM_ALERT_CHAT_ID") # Chat privado/alerta (NUEVO)
+URL_RANKING = os.environ.get("URL_RANKING_JSON")      
+TELEGRAM_ALERT_CHAT_ID = os.environ.get("TELEGRAM_ALERT_CHAT_ID") # Chat privado/alerta
 MEXICO_TZ = ZoneInfo(os.environ.get("TZ", "America/Mexico_City")) 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; Script/1.0)'}
 
+# --- HEADERS DE NAVEGADOR (ANTI-BLOQUEO 403) ---
+HEADERS_SEGURIDAD = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/json,xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Referer': 'https://24hometv.xyz/',
+    'Connection': 'keep-alive'
+}
 
 PLANTILLAS_POR_DEPORTE = {
-    # PLANTILLAS PARA FÚTBOL / SOCCER (⚽) - 6 VARIANTES
+    # PLANTILLAS PARA FÚTBOL / SOCCER (⚽)
     "⚽": [
         {
             "titulo": "⚽ *¡EL CLÁSICO DEL FIN DE SEMANA!* ⚽",
@@ -63,7 +70,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
-    # PLANTILLAS PARA FÚTBOL AMERICANO (🏈) - 6 VARIANTES
+    # PLANTILLAS PARA FÚTBOL AMERICANO (🏈)
     "🏈": [
         {
             "titulo": "🏈 *¡DÍA DE TOUCHDOWN!* 🏈",
@@ -102,7 +109,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
-    # PLANTILLAS PARA BÉISBOL (⚾) - 6 VARIANTES
+    # PLANTILLAS PARA BÉISBOL (⚾)
     "⚾": [
         {
             "titulo": "⚾ *¡HOME RUN! EL PARTIDO DE HOY* ⚾",
@@ -141,7 +148,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
-    # PLANTILLAS PARA BALONCESTO (🏀) - 6 VARIANTES
+    # PLANTILLAS PARA BALONCESTO (🏀)
     "🏀": [
         {
             "titulo": "🏀 *¡ACCIÓN EN LA CANCHA!* 🏀",
@@ -180,7 +187,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
-    # PLANTILLAS PARA COMBATE (🥊) - 3 VARIANTES
+    # PLANTILLAS PARA COMBATE (🥊)
     "🥊": [
         {
             "titulo": "🥊 *¡NOCHE DE NOQUEOS!* 🥊",
@@ -201,7 +208,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         }
     ],
-    # PLANTILLAS PARA CARRERAS / AUTOMOVILISMO (🏎️) - 3 VARIANTES
+    # PLANTILLAS PARA CARRERAS / AUTOMOVILISMO (🏎️)
     "🏎️": [
         {
             "titulo": "🏁 *¡ARRANCAN LOS MOTORES!* 🏎️",
@@ -222,7 +229,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         },
     ],
-    # PLANTILLAS PARA TENIS (🎾) - 2 VARIANTES
+    # PLANTILLAS PARA TENIS (🎾)
     "🎾": [
         {
             "titulo": "🎾 *DUELO EN LA CANCHA CENTRAL* 🎾",
@@ -237,7 +244,7 @@ PLANTILLAS_POR_DEPORTE = {
             "ESPECIAL_FIN_SEMANA": False
         },
     ],
-    # PLANTILLAS GENÉRICAS (⭐) - 6 VARIANTES
+    # PLANTILLAS GENÉRICAS (⭐)
     "⭐": [
         {
             "titulo": "⭐ *DESTACADO DEL DÍA* ⭐",
@@ -279,20 +286,14 @@ PLANTILLAS_POR_DEPORTE = {
 }
 
 
-# --- FUNCIÓN DE ALERTA INDEPENDIENTE (NUEVA) ---
+# --- FUNCIÓN DE ALERTA INDEPENDIENTE ---
 def enviar_alerta_telegram(token, mensaje):
-    """
-    Envía un mensaje de alerta al chat personal del administrador.
-    Utiliza TELEGRAM_ALERT_CHAT_ID.
-    """
     if not token or not TELEGRAM_ALERT_CHAT_ID:
         print("ADVERTENCIA: No se pudo enviar la alerta. El Token o el Chat ID de alerta no están configurados.")
         return False
     
     url_api = f"https://api.telegram.org/bot{token}/sendMessage"
     
-    # Preparamos el mensaje de alerta para Telegram
-    # Reemplazamos los caracteres especiales para Markdown para asegurar que la alerta se muestre correctamente.
     def escape_for_alert(text):
         return re.sub(r'([_*[\]()~`>#+\-=|{}.!])', r'\\\1', text)
         
@@ -313,20 +314,13 @@ def enviar_alerta_telegram(token, mensaje):
         print(f"ERROR: Falló el envío de la alerta. Causa: {e}")
         return False
 
-# --- El resto de funciones (es_fin_de_semana, es_evento_femenino, etc.) se mantiene igual ---
 
 def es_fin_de_semana():
-    """
-    Verifica si la ejecución es Sábado (5) o Domingo (6) en la zona horaria de CDMX.
-    """
     hoy = datetime.now(MEXICO_TZ).weekday() 
     return hoy >= 5 
 
 
 def es_evento_femenino(evento):
-    """
-    Verifica si el evento debe ser excluido (Regla 1).
-    """
     organizador = evento.get('evento_principal', '').upper()
     
     if evento.get('partidos') and evento['partidos']:
@@ -334,20 +328,18 @@ def es_evento_femenino(evento):
     else:
         descripcion = ''
 
-    # Excluir basado en palabras clave específicas: 'FEMENIL', 'WNBA', 'NWSL', etc.
-    if 'FEMENIL' in organizador or 'WNBA' in organizador or 'NWSL' in organizador or \
-       'FEMENIL' in descripcion or 'WNBA' in descripcion or 'NWSL' in descripcion:
+    palabras_clave = ['FEMENIL', 'WNBA', 'NWSL', 'WOMEN', 'FEMENINO', 'LIGA MX FEMENIL', 'QUEENS LEAGUE']
+    
+    if any(keyword in organizador for keyword in palabras_clave) or \
+       any(keyword in descripcion for keyword in palabras_clave):
         return True
     return False
 
 
 def validar_fecha_actualizacion(url_json):
-    """
-    Descarga el JSON de eventos principal y verifica que la fecha_actualizacion 
-    corresponde al día de hoy en la Ciudad de México.
-    """
     try:
-        respuesta = requests.get(url_json, headers=HEADERS, timeout=10)
+        # HEADERS SEGURIDAD AQUÍ
+        respuesta = requests.get(url_json, headers=HEADERS_SEGURIDAD, timeout=10)
         respuesta.raise_for_status()
         datos = respuesta.json()
         
@@ -368,24 +360,20 @@ def validar_fecha_actualizacion(url_json):
             return False
 
     except requests.exceptions.RequestException as e:
-        # Propagamos la excepción para ser capturada en main y enviar la alerta
         raise Exception(f"Fallo de Conexión. JSON no accesible: {e}")
     except Exception as e:
         raise Exception(f"Fallo al procesar el JSON de validación: {e}")
 
 
 def obtener_eventos_rankeados(url_ranking):
-    """
-    Descarga el JSON de ranking y devuelve la lista de eventos, aplicando el filtro femenino.
-    """
     try:
-        respuesta = requests.get(url_ranking, headers=HEADERS, timeout=10)
+        # HEADERS SEGURIDAD AQUÍ TAMBIÉN
+        respuesta = requests.get(url_ranking, headers=HEADERS_SEGURIDAD, timeout=10)
         respuesta.raise_for_status()
         datos = respuesta.json()
         
         eventos = datos.get("eventos_relevantes", []) 
         
-        # APLICACIÓN DE LA REGLA 1: Filtrar eventos femeninos
         eventos_filtrados = [e for e in eventos if not es_evento_femenino(e)]
         
         if len(eventos) != len(eventos_filtrados):
@@ -401,10 +389,6 @@ def obtener_eventos_rankeados(url_ranking):
 
 
 def formatear_mensaje_telegram(evento):
-    """
-    Crea un mensaje atractivo en formato Markdown para Telegram, seleccionando una 
-    plantilla de mensaje aleatoria basada en el tipo de deporte y el día de la semana.
-    """
     def escape_markdown(text):
         return re.sub(r'([\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
@@ -413,18 +397,15 @@ def formatear_mensaje_telegram(evento):
     else:
         partido_principal = evento 
 
-    # Extracción y limpieza segura de datos
     horarios = escape_markdown(partido_principal.get('horarios', 'Sin hora'))
     canales = escape_markdown(", ".join(partido_principal.get('canales', ['Canal Desconocido'])))
     competidores = escape_markdown(" vs ".join(partido_principal.get('competidores', ['Competidores'])))
     organizador = escape_markdown(evento.get('evento_principal', 'Evento Deportivo'))
     detalle_partido = escape_markdown(partido_principal.get('detalle_partido', 'Ubicación Desconocida'))
     
-    # 1. DETECCIÓN DEL TIPO DE DEPORTE
     tipo_deporte = "⭐"
     evento_principal_texto = evento.get('evento_principal', '')
     
-    # Expresión regular para detectar emojis clave
     match_emoji = re.search(r'([\U0001F3C1\U0001F3C6\U0001F3BE\U0001F94A\U0001F3D0\u26BD\u26BE\U0001F3C0\U0001F3C8\U0001F3CE\U0001F3D3\U0001F3F8\u26BE\u26BD\u26F3\U0001F3BE]+)', evento_principal_texto)
     
     if match_emoji:
@@ -438,7 +419,6 @@ def formatear_mensaje_telegram(evento):
         elif "🥊" in emoji_detectado or "\U0001F94A" in emoji_detectado or "🤼" in emoji_detectado: tipo_deporte = "🥊"
         elif "🏎️" in emoji_detectado or "\U0001F3CE" in emoji_detectado: tipo_deporte = "🏎️"
              
-    # 2. SELECCIÓN DE PLANTILLA ALEATORIA (Regla 2: Filtro de Fin de Semana)
     es_weekend = es_fin_de_semana()
     
     plantillas_disponibles_total = PLANTILLAS_POR_DEPORTE.get(tipo_deporte, PLANTILLAS_POR_DEPORTE["⭐"])
@@ -455,7 +435,6 @@ def formatear_mensaje_telegram(evento):
 
     plantilla = random.choice(plantillas_a_usar)
     
-    # 3. CONSTRUCCIÓN DEL MENSAJE
     cuerpo_dinamico = plantilla["cuerpo"].format(
         organizador=organizador,
         competidores=competidores,
@@ -464,7 +443,6 @@ def formatear_mensaje_telegram(evento):
         canales=canales
     )
     
-    # 4. CONSTRUCCIÓN FINAL
     mensaje = (
         f"{plantilla['titulo']}\n\n"
         f"{cuerpo_dinamico}\n\n"
@@ -475,9 +453,6 @@ def formatear_mensaje_telegram(evento):
 
 
 def enviar_mensaje_telegram(token, chat_id, mensaje):
-    """
-    Envía un mensaje individual a Telegram.
-    """
     if not token or not chat_id:
         print("Error: El token del bot o el ID del chat no están configurados.")
         return False
@@ -491,7 +466,7 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
     }
     
     try:
-        respuesta = requests.post(url_api, json=payload) 
+        respuesta = requests.post(url_api, json=payload, timeout=20) 
         respuesta.raise_for_status()
         
         if respuesta.json().get('ok'):
@@ -506,7 +481,6 @@ def enviar_mensaje_telegram(token, chat_id, mensaje):
 
 
 def main():
-    # 1. VERIFICACIÓN CRÍTICA DE SECRETS
     if not (BOT_TOKEN and CHAT_ID and URL_VALIDACION and URL_RANKING and TELEGRAM_ALERT_CHAT_ID):
         error_msg = "ERROR CRÍTICO: Faltan secretos de configuración (Telegram/URLs/Alertas). Proceso detenido."
         print(error_msg)
@@ -515,12 +489,11 @@ def main():
 
     print("--- INICIANDO PROCESO DE ENVÍO DE EVENTOS RANKADOS ---")
     
-    # 2. VALIDACIÓN DE FECHA Y CONEXIÓN
     try:
         if not validar_fecha_actualizacion(URL_VALIDACION):
             error_msg = f"ERROR: La fecha del JSON principal no es la de hoy ({datetime.now(MEXICO_TZ).date()}). Deteniendo el envío."
             print(error_msg)
-            enviar_alerta_telegram(BOT_TOKEN, error_msg)
+            # enviar_alerta_telegram(BOT_TOKEN, error_msg) # Descomentar si deseas alerta de esto
             return
     except Exception as e:
         error_msg = f"ERROR: Fallo de red/JSON al validar la fecha. {e.__class__.__name__}: {e}"
@@ -528,7 +501,6 @@ def main():
         enviar_alerta_telegram(BOT_TOKEN, error_msg)
         return
 
-    # 3. OBTENCIÓN Y FILTRADO DE EVENTOS
     try:
         eventos = obtener_eventos_rankeados(URL_RANKING)
     except Exception as e:
@@ -541,18 +513,17 @@ def main():
         print("No se encontraron eventos rankeados para enviar. Proceso finalizado.")
         return
         
-    # 4. ENVÍO DE MENSAJES INDIVIDUALES
     print(f"Encontrados {len(eventos)} eventos. Iniciando envío público...")
     
     mensajes_enviados = 0
-    for i, evento in enumerate(eventos[:3]): # Limitamos a los 3 primeros
+    # Aumenté el límite a 5, pero puedes regresarlo a 3 si prefieres
+    for i, evento in enumerate(eventos[:5]): 
         mensaje_markdown = formatear_mensaje_telegram(evento)
         
         print(f"Enviando Evento {i+1}...")
         if enviar_mensaje_telegram(BOT_TOKEN, CHAT_ID, mensaje_markdown):
             mensajes_enviados += 1
         else:
-            # Fallo en el envío público. Enviamos una alerta específica.
             error_msg = f"ERROR: Fallo al enviar Evento {i+1} ({evento.get('evento_principal', 'Desconocido')}). Revisa el log de GitHub."
             print(error_msg)
             enviar_alerta_telegram(BOT_TOKEN, error_msg)
