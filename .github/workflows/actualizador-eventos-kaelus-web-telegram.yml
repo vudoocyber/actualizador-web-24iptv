@@ -19,11 +19,12 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade requests beautifulsoup4 google-generativeai pytz packaging
+          # ACTUALIZADO: Se eliminó 'google-generativeai' para optimizar velocidad (no se usa aquí)
+          pip install --upgrade requests beautifulsoup4 pytz packaging
 
       - name: Ejecutar script de actualizacion y subida
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # ACTUALIZADO: Ya no enviamos GEMINI_API_KEY
           URL_FUENTE: ${{ secrets.URL_FUENTE }}
           NOMBRE_ARCHIVO_PROGRAMACION: ${{ secrets.NOMBRE_ARCHIVO_PROGRAMACION }}
           NOMBRE_ARCHIVO_MENSAJE: ${{ secrets.NOMBRE_ARCHIVO_MENSAJE }}
@@ -33,7 +34,7 @@ jobs:
         run: python actualizador_web.py
 
       # ----------------------------------------------------------------------
-      # ✅ NOTIFICACIÓN DE ÉXITO (Mantiene la lógica de negritas y el nombre del archivo)
+      # ✅ NOTIFICACIÓN DE ÉXITO
       # ----------------------------------------------------------------------
       - name: Enviar notificación de éxito a Telegram
         if: success()
@@ -49,7 +50,7 @@ jobs:
             -d "parse_mode=Markdown"
 
       # ----------------------------------------------------------------------
-      # ❌ NOTIFICACIÓN DE FALLO (Mantiene la lógica de negritas y el nombre del archivo)
+      # ❌ NOTIFICACIÓN DE FALLO
       # ----------------------------------------------------------------------
       - name: Enviar notificación de fallo a Telegram
         if: failure()
