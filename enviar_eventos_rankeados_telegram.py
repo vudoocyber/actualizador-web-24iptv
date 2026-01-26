@@ -6,13 +6,6 @@ from zoneinfo import ZoneInfo
 import re
 import random 
 
-# --- Mapeo de meses ---
-MESES_ESPANOL = {
-    'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
-    'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
-    'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
-}
-
 # --- CONFIGURACIÓN Y SECRETS ---
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -30,41 +23,218 @@ HEADERS_SEGURIDAD = {
     'Connection': 'keep-alive'
 }
 
+# --- DICCIONARIO DE PLANTILLAS EXPANDIDO ---
 PLANTILLAS_POR_DEPORTE = {
+    # ⚽ FÚTBOL (5 Variantes)
     "⚽": [
-        {"titulo": "⚽ *¡PARTIDAZO DE FÚTBOL!* ⚽", "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Transmisión: _{canales}_", "cierre": "⚡ *Consulta horarios y canales aquí* 👇\n\n", "ESPECIAL_FIN_SEMANA": True},
-        {"titulo": "⚽🚨 *ALERTA DE GOLAZOS* 🚨⚽", "cuerpo": "*{organizador}*\n\n🆚 Partido: *{competidores}*\n\n🕓 Hora: *{horarios}*\n\n📡 Ver en: _{canales}_", "cierre": "📲 No te quedes fuera:\n\n", "ESPECIAL_FIN_SEMANA": False},
-        {"titulo": "⚽🔥 *FIEBRE DE FÚTBOL* 🔥⚽", "cuerpo": "🏟️ Sede: {detalle_partido}\n\n🏅 Duelo: *{competidores}*\n\n🕒 Inicio: *{horarios}*\n\n📺 Canales: _{canales}_", "cierre": "👇 *Guía completa aquí*:\n\n", "ESPECIAL_FIN_SEMANA": False}
+        {
+            "titulo": "⚽ *¡PARTIDAZO DE FÚTBOL!* ⚽",
+            "cuerpo": "🏆 Encuentro: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "⚡ *Consulta horarios y canales aquí* 👇\n\n",
+            "ESPECIAL_FIN_SEMANA": True
+        },
+        {
+            "titulo": "⚽🚨 *ALERTA DE GOLAZOS* 🚨⚽",
+            "cuerpo": "*{organizador}*\n\n🆚 Partido: *{competidores}*\n\n🕓 Hora: *{horarios}*\n\n📡 Ver en: _{canales}_",
+            "cierre": "📲 No te quedes fuera:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚽🔥 *FIEBRE DE FÚTBOL* 🔥⚽",
+            "cuerpo": "🏟️ Sede: {detalle_partido}\n\n🏅 Duelo: *{competidores}*\n\n🕒 Inicio: *{horarios}*\n\n📺 Canales: _{canales}_",
+            "cierre": "👇 *Guía completa aquí*:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚽🏆 *JORNADA DE CAMPEONES* 🏆⚽",
+            "cuerpo": "*{organizador}*\n\n⚔️ Enfrentamiento: *{competidores}*\n\n⏰ Kickoff: *{horarios}*\n\n🎥 Dónde ver: _{canales}_",
+            "cierre": "🌐 Toda la información:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚽📢 *FÚTBOL EN VIVO AHORA* 📢⚽",
+            "cuerpo": "🏅 *{competidores}*\n\n📍 Desde: {detalle_partido}\n\n⏱️ Hora: *{horarios}*\n\n📺 Señal: _{canales}_",
+            "cierre": "🔗 Sigue el partido:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
+
+    # 🏈 NFL / AMERICANO (5 Variantes)
     "🏈": [
-        {"titulo": "🏈 *¡TOUCHDOWN!* 🏈", "cuerpo": "🏆 Juego: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕒 Kickoff: *{horarios}*\n\n📺 Ver en: _{canales}_", "cierre": "💪 *Consulta detalles aquí*:\n\n", "ESPECIAL_FIN_SEMANA": True},
-        {"titulo": "🏈🚨 *ALERTA NFL / NCAA* 🚨🏈", "cuerpo": "*{organizador}*\n\n⚔️ Enfrentamiento: *{competidores}*\n\n🕓 Hora: *{horarios}*\n\n📡 Transmisión: _{canales}_", "cierre": "📲 Guía completa:\n\n", "ESPECIAL_FIN_SEMANA": False}
+        {
+            "titulo": "🏈 *¡TOUCHDOWN!* 🏈",
+            "cuerpo": "🏆 Juego: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕒 Kickoff: *{horarios}*\n\n📺 Ver en: _{canales}_",
+            "cierre": "💪 *Consulta detalles aquí*:\n\n",
+            "ESPECIAL_FIN_SEMANA": True
+        },
+        {
+            "titulo": "🏈🚨 *ALERTA NFL / NCAA* 🚨🏈",
+            "cuerpo": "*{organizador}*\n\n⚔️ Enfrentamiento: *{competidores}*\n\n🕓 Hora: *{horarios}*\n\n📡 Transmisión: _{canales}_",
+            "cierre": "📲 Guía completa:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏈🛡️ *BATALLA EN EL GRIDIRON* 🛡️🏈",
+            "cuerpo": "🏅 Duelo: *{competidores}*\n\n📍 Sede: {detalle_partido}\n\n⏰ Hora: *{horarios}*\n\n📺 Canal: _{canales}_",
+            "cierre": "🔗 Estadísticas y más:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏈🔥 *ZONA ROJA: PARTIDO CLAVE* 🔥🏈",
+            "cuerpo": "*{organizador}*\n\n🏈 Juegan: *{competidores}*\n\n⏱️ Inicio: *{horarios}*\n\n🎥 Cobertura: _{canales}_",
+            "cierre": "👉 No te pierdas nada:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏈📢 *FÚTBOL AMERICANO HOY* 📢🏈",
+            "cuerpo": "🏆 *{competidores}*\n\n🏟️ Lugar: {detalle_partido}\n\n🕓 Kickoff: *{horarios}*\n\n📺 Dónde ver: _{canales}_",
+            "cierre": "🌐 Link de transmisión:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
+
+    # ⚾ BÉISBOL (5 Variantes)
     "⚾": [
-        {"titulo": "⚾ *¡PLAY BALL!* ⚾", "cuerpo": "🏆 Duelo: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕓 Hora: *{horarios}*\n\n📺 Transmisión: _{canales}_", "cierre": "🤩 *Consulta aquí*:\n\n", "ESPECIAL_FIN_SEMANA": False},
-        {"titulo": "⚾🔥 *BÉISBOL EN VIVO* 🔥⚾", "cuerpo": "🏅 Evento: *{competidores}*\n\n🕒 Inicio: *{horarios}*\n\n🎥 Canales: _{canales}_", "cierre": "🔗 Sigue el juego:\n\n", "ESPECIAL_FIN_SEMANA": False}
+        {
+            "titulo": "⚾ *¡PLAY BALL!* ⚾",
+            "cuerpo": "🏆 Duelo: *{competidores}*\n\n🏟️ Estadio: {detalle_partido}\n\n🕓 Hora: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "🤩 *Consulta aquí*:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚾🔥 *BÉISBOL EN VIVO* 🔥⚾",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n🕒 Inicio: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "🔗 Sigue el juego:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚾🧢 *TARDE DE DIAMANTE* 🧢⚾",
+            "cuerpo": "*{organizador}*\n\n⚔️ Partido: *{competidores}*\n\n⏰ Primera bola: *{horarios}*\n\n📺 Ver en: _{canales}_",
+            "cierre": "📲 Resultados en vivo:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚾🚨 *ALERTA MLB / LMP* 🚨⚾",
+            "cuerpo": "🏟️ Sede: {detalle_partido}\n\n🆚 Equipos: *{competidores}*\n\n⏱️ Hora: *{horarios}*\n\n📡 Señal: _{canales}_",
+            "cierre": "👉 Guía de canales:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "⚾💥 *HOME RUN DEL DÍA* 💥⚾",
+            "cuerpo": "*{organizador}*\n\n🏆 *{competidores}*\n\n🕓 Comienza: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "🌐 Todos los detalles:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
+
+    # 🏀 BASKETBALL (5 Variantes)
     "🏀": [
-        {"titulo": "🏀 *¡ACCIÓN EN LA DUELA!* 🏀", "cuerpo": "🏆 Juego: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n🕓 Hora: *{horarios}*\n\n📺 Ver en: _{canales}_", "cierre": "⚡ *Detalles aquí*:\n\n", "ESPECIAL_FIN_SEMANA": False},
-        {"titulo": "🏀🚨 *ALERTA BASKET* 🚨🏀", "cuerpo": "*{organizador}*\n\n⚔️ Duelo: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n📡 Cobertura: _{canales}_", "cierre": "📲 Guía completa:\n\n", "ESPECIAL_FIN_SEMANA": False}
+        {
+            "titulo": "🏀 *¡ACCIÓN EN LA DUELA!* 🏀",
+            "cuerpo": "🏆 Juego: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n🕓 Hora: *{horarios}*\n\n📺 Ver en: _{canales}_",
+            "cierre": "⚡ *Detalles aquí*:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏀🚨 *ALERTA BASKET* 🚨🏀",
+            "cuerpo": "*{organizador}*\n\n⚔️ Duelo: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n📡 Cobertura: _{canales}_",
+            "cierre": "📲 Guía completa:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏀🔥 *SHOWTIME: NBA & MÁS* 🔥🏀",
+            "cuerpo": "🏅 Partido: *{competidores}*\n\n📍 Arena: {detalle_partido}\n\n⏱️ Salto inicial: *{horarios}*\n\n🎥 Canal: _{canales}_",
+            "cierre": "🔗 Sigue el marcador:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏀⛹️‍♂️ *BASKETBALL EN VIVO* ⛹️‍♂️🏀",
+            "cuerpo": "*{organizador}*\n\n🆚 Equipos: *{competidores}*\n\n🕒 Hora: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "👉 Dónde ver:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏀⭐ *PARTIDAZO EN LA PINTURA* ⭐🏀",
+            "cuerpo": "🏆 *{competidores}*\n\n🏟️ Lugar: {detalle_partido}\n\n⏰ Hora: *{horarios}*\n\n📡 Señal: _{canales}_",
+            "cierre": "🌐 Toda la info:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
-    "🥊": [
-        {"titulo": "🥊 *¡NOCHE DE PELEA!* 🥊", "cuerpo": "*{organizador}*\n\n👊 Combate: *{competidores}*\n\n🏟️ Sede: {detalle_partido}\n\n⏱️ Hora: *{horarios}*\n\n📺 Ver en: _{canales}_", "cierre": "🔥 *Cartelera completa aquí*:\n\n", "ESPECIAL_FIN_SEMANA": True},
-        {"titulo": "🥊🚨 *ALERTA UFC / BOX* 🚨🥊", "cuerpo": "🏅 Evento: *{competidores}*\n\n🕓 Hora: *{horarios}*\n\n📡 Transmisión: _{canales}_", "cierre": "📲 Sigue el evento:\n\n", "ESPECIAL_FIN_SEMANA": False}
+
+    # ⛳ GOLF (2 Variantes)
+    "⛳": [
+        {
+            "titulo": "⛳ *¡DÍA DE GOLF!* ⛳",
+            "cuerpo": "🏆 Torneo: *{organizador}*\n\n🏌️‍♂️ Ronda/Evento: *{competidores}*\n\n⛳ Campo: {detalle_partido}\n\n⏰ Tee Time/Inicio: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "⚡ *Sigue el leaderboard aquí* 👇\n\n",
+            "ESPECIAL_FIN_SEMANA": True
+        },
+        {
+            "titulo": "⛳🏌️‍♂️ *SWING PERFECTO EN VIVO* 🏌️‍♂️⛳",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n📍 Sede: {detalle_partido}\n\n🕓 Horario TV: *{horarios}*\n\n📡 Ver en: _{canales}_",
+            "cierre": "📲 Guía de transmisión:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
-    "🏎️": [
-        {"titulo": "🏁 *¡MOTOR EN MARCHA!* 🏎️", "cuerpo": "*{organizador}*\n\n🛣️ Carrera/Sesión: *{competidores}*\n\n📍 Circuito: {detalle_partido}\n\n⏱️ Hora: *{horarios}*\n\n📺 Ver en: _{canales}_", "cierre": "💨 *Consulta horarios aquí*:\n\n", "ESPECIAL_FIN_SEMANA": True},
-        {"titulo": "🏎️🚨 *ALERTA F1 / NASCAR* 🚨🏎️", "cuerpo": "🏅 Evento: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n🎥 Canales: _{canales}_", "cierre": "🔗 Acceso directo:\n\n", "ESPECIAL_FIN_SEMANA": False}
+
+    # 🏒 NHL / HOCKEY (3 Variantes)
+    "🏒": [
+        {
+            "titulo": "🏒 *¡FACE-OFF! HOCKEY EN VIVO* 🏒",
+            "cuerpo": "🏆 Partido: *{competidores}*\n\n🧊 Pista: {detalle_partido}\n\n⏰ Hora: *{horarios}*\n\n📺 Transmisión: _{canales}_",
+            "cierre": "❄️ *Sigue la acción aquí* 👇\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏒🚨 *ALERTA NHL / HIELO* 🚨🏒",
+            "cuerpo": "*{organizador}*\n\n⚔️ Duelo: *{competidores}*\n\n⏱️ Inicio: *{horarios}*\n\n📡 Canal: _{canales}_",
+            "cierre": "👉 Consulta horarios:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🏒🥅 *POWER PLAY EN PROGRESO* 🥅🏒",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n📍 Arena: {detalle_partido}\n\n🕓 Hora: *{horarios}*\n\n🎥 Cobertura: _{canales}_",
+            "cierre": "🔗 Ver detalles:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ],
-    "🎾": [
-        {"titulo": "🎾 *TENIS EN VIVO* 🎾", "cuerpo": "*{organizador}*\n\n⚔️ Partido/Ronda: *{competidores}*\n\n📍 Torneo: {detalle_partido}\n\n⏱️ Hora: *{horarios}*\n\n📺 Transmisión: _{canales}_", "cierre": "👉 Sigue el marcador:\n\n", "ESPECIAL_FIN_SEMANA": False},
-        {"titulo": "🎾🔔 *ALERTA GRAND SLAM / ATP* 🔔🎾", "cuerpo": "🏆 Evento: *{competidores}*\n\n⏰ Horario: *{horarios}*\n\n🎥 Dónde Verlo: _{canales}_", "cierre": "🌐 Resultados:\n\n", "ESPECIAL_FIN_SEMANA": False}
-    ],
+
+    # ⭐ GENÉRICO / VARIOS (5 Variantes)
     "⭐": [
-        {"titulo": "⭐ *DESTACADO DEL DÍA* ⭐", "cuerpo": "🏆 Evento: *{competidores}*\n\n🏟️ Detalle: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Canales: _{canales}_", "cierre": "➡️ ¡Consulta más aquí!:\n\n", "ESPECIAL_FIN_SEMANA": False},
-        {"titulo": "🔥 *EVENTO EN VIVO* 🔥", "cuerpo": "🏆 Competencia: *{competidores}*\n\n⌚ Hora: *{horarios}*\n\n📡 Transmisión: _{canales}_", "cierre": "📲 ¡Sintoniza ya!:\n\n", "ESPECIAL_FIN_SEMANA": False}
+        {
+            "titulo": "⭐ *DESTACADO DEL DÍA* ⭐",
+            "cuerpo": "🏆 Evento: *{competidores}*\n\n🏟️ Detalle: {detalle_partido}\n\n⏰ Horario: *{horarios}*\n\n📺 Canales: _{canales}_",
+            "cierre": "➡️ ¡Consulta más aquí!:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🔥 *EVENTO EN VIVO* 🔥",
+            "cuerpo": "🏆 Competencia: *{competidores}*\n\n⌚ Hora: *{horarios}*\n\n📡 Transmisión: _{canales}_",
+            "cierre": "📲 ¡Sintoniza ya!:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "📺 *GUÍA DE TRANSMISIÓN* 📺",
+            "cuerpo": "*{organizador}*\n\n🏅 *{competidores}*\n\n🕐 Hora: *{horarios}*\n\n🎥 Canales: _{canales}_",
+            "cierre": "👇 Info completa:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "📰 *AGENDA DEPORTIVA* 📰",
+            "cuerpo": "🏅 Evento: *{competidores}*\n\n📍 Ubicación: {detalle_partido}\n\n🕒 Inicio: *{horarios}*\n\n📺 Cobertura: _{canales}_",
+            "cierre": "🌐 Programación completa:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        },
+        {
+            "titulo": "🔔 *NO TE LO PIERDAS* 🔔",
+            "cuerpo": "*{organizador}*\n\n⚔️ *{competidores}*\n\n⏱️ Horarios: *{horarios}*\n\n📡 Dónde ver: _{canales}_",
+            "cierre": "🔗 Acceso rápido:\n\n",
+            "ESPECIAL_FIN_SEMANA": False
+        }
     ]
 }
+
+# --- FUNCIONES AUXILIARES ---
 
 def enviar_alerta_telegram(token, mensaje):
     if not token or not TELEGRAM_ALERT_CHAT_ID:
@@ -112,7 +282,6 @@ def obtener_eventos_rankeados(url_ranking):
     except Exception as e:
         raise Exception(f"Error obteniendo ranking: {e}")
 
-# --- AQUÍ ESTÁ LA CORRECCIÓN CLAVE ---
 def formatear_mensaje_telegram(evento):
     def escape_markdown(text):
         return re.sub(r'([\[\]()~`>#+\-=|{}.!])', r'\\\1', str(text))
@@ -122,32 +291,26 @@ def formatear_mensaje_telegram(evento):
     else:
         partido = evento 
 
-    # 1. INTELIGENCIA PARA EL CAMPO "COMPETIDORES"
-    # Si la lista de competidores está vacía (como en el Tenis o F1),
-    # usamos la "descripcion" (ej: Cuartos de Final) como el texto principal.
+    # Lógica de respaldo para competidores
     lista_competidores = partido.get('competidores', [])
     descripcion_partido = partido.get('descripcion', '').strip()
     nombre_evento_principal = evento.get('evento_principal', 'Evento Deportivo')
 
     if lista_competidores:
-        # Caso ideal: Hay equipos (Real Madrid vs Barcelona)
         texto_central = " vs ".join(lista_competidores)
     elif descripcion_partido:
-        # Caso Tenis/Torneos: Usamos la descripción (Cuartos de Final)
-        # Y le agregamos contexto si es necesario
         texto_central = descripcion_partido
     else:
-        # Caso Extremo: Usamos el nombre del evento para no mandar vacío
         texto_central = nombre_evento_principal
 
-    # Extracción de datos con escape para Markdown
+    # Extracción de datos
     competidores = escape_markdown(texto_central)
     horarios = escape_markdown(partido.get('horarios', 'Sin hora'))
     canales = escape_markdown(", ".join(partido.get('canales', ['Canal Desconocido'])))
     organizador = escape_markdown(nombre_evento_principal)
     detalle_partido = escape_markdown(partido.get('detalle_partido', 'Sede por confirmar'))
     
-    # Detección de deporte
+    # Detección de deporte (ACTUALIZADO CON GOLF Y HOCKEY)
     tipo_deporte = "⭐"
     texto_para_emoji = nombre_evento_principal
     
@@ -155,9 +318,9 @@ def formatear_mensaje_telegram(evento):
     elif re.search(r'(🏈|\U0001F3C8)', texto_para_emoji): tipo_deporte = "🏈"
     elif re.search(r'(⚾|\u26BE)', texto_para_emoji): tipo_deporte = "⚾"
     elif re.search(r'(🏀|\U0001F3C0)', texto_para_emoji): tipo_deporte = "🏀"
-    elif re.search(r'(🎾|\U0001F3BE)', texto_para_emoji): tipo_deporte = "🎾"
-    elif re.search(r'(🥊|\U0001F94A|🤼)', texto_para_emoji): tipo_deporte = "🥊"
-    elif re.search(r'(🏎️|\U0001F3CE)', texto_para_emoji): tipo_deporte = "🏎️"
+    elif re.search(r'(⛳|\u26F3)', texto_para_emoji): tipo_deporte = "⛳"  # GOLF
+    elif re.search(r'(🏒|\U0001F3D2)', texto_para_emoji): tipo_deporte = "🏒"  # HOCKEY
+    elif re.search(r'(🥊|\U0001F94A|🤼)', texto_para_emoji): tipo_deporte = "⭐" # Uso genérico para combate si no hay específico
              
     # Selección de plantilla
     es_weekend = es_fin_de_semana()
@@ -174,7 +337,7 @@ def formatear_mensaje_telegram(evento):
     
     cuerpo = plantilla["cuerpo"].format(
         organizador=organizador,
-        competidores=competidores, # ¡AHORA YA NO ESTARÁ VACÍO!
+        competidores=competidores,
         detalle_partido=detalle_partido,
         horarios=horarios,
         canales=canales
