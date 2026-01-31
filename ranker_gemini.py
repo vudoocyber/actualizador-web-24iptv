@@ -16,6 +16,7 @@ URL_JSON_LEGACY_CHECK = "https://24hometv.xyz/eventos-relevantes.json"
 # Nombres de Archivos
 ARCHIVO_LEGACY = "eventos-relevantes.json"        # Top 5 | Emojis | 1 vez al día (Telegram)
 ARCHIVO_ROKU = "eventos-destacados-roku.json"     # Top 20 | Limpio | Recurrente
+ARCHIVO_FIRE = "eventos-destacados-fire.json"     # Top 20 | Emojis | Recurrente (NUEVO)
 ARCHIVO_WEB = "eventos-importantes-web.json"      # Top Dinámico (3 o 5) | Emojis | Recurrente
 
 FTP_HOST = os.getenv('FTP_HOST')
@@ -328,7 +329,30 @@ def main():
         json.dump(json_roku, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_ROKU)
 
-    # C. EVENTOS-IMPORTANTES-WEB (Top Dinámico)
+    # C. EVENTOS-DESTACADOS-FIRE (Top 20 - Emojis - NUEVO)
+    # Usamos los mismos eventos que Roku (Top 20) pero SIN limpiar texto (con Emojis)
+    top_20_fire = []
+    limit_fire = min(len(eventos_seleccionados), 20)
+    
+    for ev, pt, nom in eventos_seleccionados[:limit_fire]:
+        # No usamos limpiar_texto_roku, agregamos directo
+        top_20_fire.append({
+            "evento_principal": nom,
+            "detalle_evento": ev.get("detalle_evento", ""),
+            "partidos": [pt]
+        })
+
+    json_fire = {
+        "fecha_actualizacion": fecha_iso,
+        "fecha_guia": hoy_str,
+        "eventos_relevantes": top_20_fire
+    }
+    print(f"Generando {ARCHIVO_FIRE} (Top 20 Fire TV - Con Emojis)...")
+    with open(ARCHIVO_FIRE, 'w', encoding='utf-8') as f:
+        json.dump(json_fire, f, indent=4, ensure_ascii=False)
+    archivos_a_subir.append(ARCHIVO_FIRE)
+
+    # D. EVENTOS-IMPORTANTES-WEB (Top Dinámico)
     top_web = []
     limit_real_web = min(len(eventos_seleccionados), limit_web)
 
