@@ -294,6 +294,7 @@ def main():
             print("¡Subida de todos los archivos completada exitosamente!")
     except Exception as e:
         print(f"ERROR FATAL durante la subida por FTP: {e}")
+        # --- fin ---
 
 if __name__ == "__main__":
     main()
