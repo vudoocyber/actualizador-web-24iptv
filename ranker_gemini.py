@@ -117,7 +117,7 @@ def obtener_ranking_eventos(lista_eventos):
         prompt = f"""
        Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado en audiencias de México, USA, LATAM y España, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
-Contexto temporal: {hora_actual}
+Contexto temporal: {hora_actual}.
 
 OBJETIVO:
 Analizar una lista de eventos y seleccionar los 40 eventos más importantes del día completo, ordenados estrictamente por relevancia real, no por horario.
