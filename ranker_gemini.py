@@ -115,49 +115,99 @@ def obtener_ranking_eventos(lista_eventos):
 
         # --- PROMPT REFINADO PARA CLASE MEDIA/ALTA Y EVENTOS VIP ---
         prompt = f"""
-        Rol: Curador experto de deportes para **MÉXICO**.
-        Audiencia: **Clase Media-Alta y Alta** (Gustos Premium).
-        
-        Contexto Temporal: {hora_actual}.
-        
-        TU MISIÓN:
-        Selecciona los **40 eventos más importantes DEL DÍA COMPLETO**.
-        
-        ⚠️ INSTRUCCIÓN CRÍTICA DE JERARQUÍA:
-        La **IMPORTANCIA** del evento supera a la **HORA**. 
-        Un partido de NBA o Grand Slam en la noche VALE MÁS que un partido de liga europea regular en la mañana.
-        No descartes eventos nocturnos solo porque faltan horas para que empiecen.
-        
-        CRITERIOS DE SELECCIÓN (EN ORDEN DE PRIORIDAD):
-        
-        1. 💎 **JOYAS PREMIUM & PPV (OBLIGATORIO INCLUIR SI EXISTEN):**
-           - **TENIS:** Grand Slams (Abierto de Australia / Australian Open), Finales ATP.
-           - **GOLF:** PGA Tour, LIV Golf, Majors.
-           - **COMBATE:** PPV, Boxeo (Canelo, Benavidez), UFC Numerado.
-           - **MOTOR:** F1 (Cualquier sesión de GP).
-           
-        2. 🏀 **DEPORTES AMERICANOS (ALTO INTERÉS):**
-           - **NBA:** Lakers, Warriors, Celtics, Heat, Mavericks (O cualquier partido parejo/Playoffs).
-           - **NFL:** Playoffs, Super Bowl, Prime Time (Sunday/Monday Night).
-           - **MLB:** Dodgers, Yankees, Astros (Playoffs o Clásicos).
-           
-        3. 🇲🇽 **FÚTBOL RELEVANTE MÉXICO:**
-           - **Liga MX:** América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey.
-           - **Selección Mexicana**.
-           
-        4. ⚽ **FÚTBOL INTERNACIONAL TOP (SOLO LO MEJOR):**
-           - Champions League (Fases finales).
-           - Partidos "Clásicos" de Europa (Real Madrid vs Barcelona, City vs Liverpool).
-           - *Nota:* Un partido regular de la Serie A o Bundesliga NO supera a la NBA o Grand Slam.
+       Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado en audiencias de México, USA, LATAM y España, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
-        5. 🕒 **REGLA DE VIGENCIA:**
-           - Solo descarta lo que **YA TERMINÓ** definitivamente.
-           - Si el evento es en la noche, ¡INCLÚYELO EN EL TOP!
+Contexto temporal: {hora_actual}
 
-        SALIDA:
-        - Lista de 40 líneas exactas.
-        - Formato simple: "Equipo A vs Equipo B" (o "Evento - Protagonista").
-        - Ordena por **RELEVANCIA**, no por hora de inicio.
+OBJETIVO:
+Analizar una lista de eventos y seleccionar los 40 eventos más importantes del día completo, ordenados estrictamente por relevancia real, no por horario.
+
+REGLA CRÍTICA:
+La importancia del evento siempre supera la hora. Eventos nocturnos importantes deben incluirse aunque falten horas.
+
+METODOLOGÍA OBLIGATORIA:
+
+Analizar todos los eventos de la lista.
+Asignar un score de relevancia de 0 a 100 a cada evento.
+Ordenarlos por score.
+Aplicar filtros de calidad.
+Seleccionar los mejores 40.
+
+SISTEMA DE SCORING:
+
+Nivel del evento (0–40 pts):
+
+Final / Campeonato / PPV: +40
+Playoffs / Eliminación directa: +30
+Torneo internacional importante: +25
+Temporada regular: +10
+Partido irrelevante: +0
+
+Popularidad del deporte (0–25 pts):
+
+Fútbol internacional top: +25
+NBA / NFL: +25
+Boxeo / UFC / F1: +25
+MLB / Tenis / Golf: +20
+Otros: +10
+
+Protagonistas (0–20 pts):
+
+Equipos o figuras élite (América, Real Madrid, Lakers, Canelo, etc.): +20
+Equipos conocidos: +10
+Sin relevancia: +0
+
+Interés regional (0–15 pts):
+
+Alto interés en México/USA: +15
+Interés medio: +8
+Bajo: +0
+
+REGLAS DE EXCLUSIÓN:
+
+No incluir partidos sin impacto competitivo.
+No incluir ligas menores sin relevancia mediática.
+No incluir equipos desconocidos sin contexto.
+Evitar eventos repetitivos o de bajo nivel.
+
+CONTROL DE DISTRIBUCIÓN:
+
+Máximo 12 eventos de fútbol.
+Mínimo 5 deportes diferentes en la lista.
+Incluir variedad entre fútbol, NBA/NFL/MLB, tenis, combate y motor.
+
+PRIORIDAD ABSOLUTA:
+
+Grand Slams (Tenis)
+F1 (cualquier sesión)
+Peleas PPV (Box/UFC)
+NBA (especialmente juegos clave o playoffs)
+NFL (especialmente Prime Time / Playoffs)
+Liga MX (equipos grandes)
+Champions League (fases finales)
+
+REGLA DE TIEMPO:
+
+Solo excluir eventos que ya terminaron.
+Incluir eventos de todo el día (mañana, tarde, noche).
+
+FORMATO DE SALIDA:
+
+Exactamente 40 líneas.
+Sin numeración.
+Sin explicaciones.
+Formato por línea:
+"Equipo A vs Equipo B"
+o
+"Evento - Protagonista"
+
+IMPORTANTE:
+
+No inventar eventos.
+No repetir eventos.
+No agregar texto adicional.
+No explicar el razonamiento.
+Entregar solo la lista final.
 
         LISTA A ANALIZAR:
         {lista_texto}
