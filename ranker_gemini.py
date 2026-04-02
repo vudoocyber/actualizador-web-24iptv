@@ -115,20 +115,37 @@ def obtener_ranking_eventos(lista_eventos):
 
         # --- PROMPT REFINADO PARA CLASE MEDIA/ALTA Y EVENTOS VIP ---
         prompt = f"""
-       Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado en audiencias de México, USA, LATAM y España, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
+ Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
 Contexto temporal: {hora_actual}.
 
 OBJETIVO:
-Analizar una lista de eventos y seleccionar los 40 eventos más importantes del día completo, ordenados estrictamente por relevancia real, no por horario.
+Analizar una lista de eventos y seleccionar los 40 eventos más importantes del día completo, optimizados específicamente para el público de México, ordenados estrictamente por relevancia real, no por horario.
 
 REGLA CRÍTICA:
 La importancia del evento siempre supera la hora. Eventos nocturnos importantes deben incluirse aunque falten horas.
+
+ENFOQUE GEOGRÁFICO OBLIGATORIO (MÉXICO):
+
+Priorizar eventos con alto interés en México.
+Ligas sudamericanas (Argentina, Brasil, etc.) SOLO se incluyen si:
+Es final
+Es semifinal
+Es clásico internacional relevante
+Partidos regulares de ligas sudamericanas deben ser descartados.
+Priorizar:
+Liga MX
+Selección Mexicana
+MLS (especialmente con mexicanos o equipos populares)
+NBA, NFL, MLB
+Champions League
+Eventos globales (F1, UFC, Boxeo, Tenis)
 
 METODOLOGÍA OBLIGATORIA:
 
 Analizar todos los eventos de la lista.
 Asignar un score de relevancia de 0 a 100 a cada evento.
+Aplicar filtro geográfico (México primero).
 Ordenarlos por score.
 Aplicar filtros de calidad.
 Seleccionar los mejores 40.
@@ -143,53 +160,66 @@ Torneo internacional importante: +25
 Temporada regular: +10
 Partido irrelevante: +0
 
-Popularidad del deporte (0–25 pts):
+Popularidad del deporte en México (0–25 pts):
 
-Fútbol internacional top: +25
+Fútbol (Liga MX / Champions / Selecciones): +25
 NBA / NFL: +25
-Boxeo / UFC / F1: +25
-MLB / Tenis / Golf: +20
-Otros: +10
+Ventos Especiales PPV (Conciertos, Peliculas, Pelea, o Partido): +30
+Boxeo / UFC / WWE (peleas relevantes,): +25
+F1: +25
+MLB: +20
+Tenis / Golf: +15
+Otros: +5
 
 Protagonistas (0–20 pts):
 
-Equipos o figuras élite (América, Real Madrid, Lakers, Canelo, etc.): +20
+Equipos o figuras élite relevantes en México (América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey, Real Madrid, Barcelona, Lakers, Canelo, etc.): +20
 Equipos conocidos: +10
 Sin relevancia: +0
 
-Interés regional (0–15 pts):
+Interés específico en México (0–15 pts):
 
-Alto interés en México/USA: +15
+Muy alto interés nacional: +15
 Interés medio: +8
-Bajo: +0
+Bajo o irrelevante: +0
+
+FILTRO GEOGRÁFICO OBLIGATORIO:
+
+Penalizar fuertemente (score máximo 20) a:
+Ligas sudamericanas en fase regular
+Equipos sin impacto en México
+Excluir completamente si no cumplen criterios mínimos.
 
 REGLAS DE EXCLUSIÓN:
 
 No incluir partidos sin impacto competitivo.
-No incluir ligas menores sin relevancia mediática.
-No incluir equipos desconocidos sin contexto.
-Evitar eventos repetitivos o de bajo nivel.
+No incluir ligas menores sin relevancia en México.
+No incluir exceso de fútbol sudamericano.
+No incluir equipos desconocidos.
+No incluir eventos con bajo interés en México.
 
 CONTROL DE DISTRIBUCIÓN:
 
 Máximo 12 eventos de fútbol.
-Mínimo 5 deportes diferentes en la lista.
-Incluir variedad entre fútbol, NBA/NFL/MLB, tenis, combate y motor.
+Mínimo 5 deportes diferentes.
+Máximo 3 eventos de ligas sudamericanas (y solo si son relevantes).
+Priorizar variedad con enfoque en gustos del público mexicano.
 
 PRIORIDAD ABSOLUTA:
 
-Grand Slams (Tenis)
-F1 (cualquier sesión)
-Peleas PPV (Box/UFC)
-NBA (especialmente juegos clave o playoffs)
-NFL (especialmente Prime Time / Playoffs)
 Liga MX (equipos grandes)
-Champions League (fases finales)
+Selección Mexicana
+NBA (equipos populares o partidos importantes)
+NFL (prime time o playoffs)
+Boxeo (especialmente peleadores mexicanos o eventos grandes)
+UFC
+F1
+Champions League (especialmente fases finales)
 
 REGLA DE TIEMPO:
 
 Solo excluir eventos que ya terminaron.
-Incluir eventos de todo el día (mañana, tarde, noche).
+Incluir eventos de todo el día.
 
 FORMATO DE SALIDA:
 
