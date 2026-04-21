@@ -6,6 +6,10 @@ on:
     - cron: '0 0,3,10,13,16,20 * * *'
   workflow_dispatch:
 
+# --- CAMBIO: Variable para eliminar la advertencia de Node.js 20 ---
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   run-ranking:
     runs-on: ubuntu-latest
@@ -29,6 +33,7 @@ jobs:
           # Añadimos el nuevo secret para que el script pueda leerlo
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }} # --- CAMBIO: Se agregó la llave de respaldo Groq ---
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
           FTP_CONTRASENA: ${{ secrets.FTP_CONTRASENA }}
