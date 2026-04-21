@@ -44,19 +44,25 @@ HEADERS_SEGURIDAD = {
 # --- 2. FUNCIONES AUXILIARES ---
 
 def limpiar_texto_roku(texto):
-    """Elimina emojis y caracteres especiales para Roku."""
+    """Elimina emojis, selectores de variación y caracteres especiales para Roku."""
     if not texto:
         return ""
+    
+    # Patrón extendido: ahora atrapa emojis, Variation Selectors y Zero-Width Joiners
     emoji_pattern = re.compile(
-        r'[\U0001F000-\U0001F9FF]'
-        r'|[\U00002600-\U000027BF]'
-        r'|[\U0001F300-\U0001F5FF]'
-        r'|[\U0001F680-\U0001F6FF]'
-        r'|[\U0001F1E0-\U0001F1FF]'
-        r'|[\u2700-\u27BF]',
+        r'[\U0001F000-\U0001FAFF]'  # Emojis misceláneos y extendidos
+        r'|[\U00002600-\U000027BF]' # Símbolos y pictogramas
+        r'|[\U0001F300-\U0001F5FF]' # Símbolos varios
+        r'|[\U0001F680-\U0001F6FF]' # Transporte y mapas
+        r'|[\U0001F1E0-\U0001F1FF]' # Banderas
+        r'|[\u2700-\u27BF]'         # Dingbats
+        r'|[\uFE00-\uFE0F]'         # Selectores de variación (El causante del cuadro)
+        r'|[\u200B-\u200D]',        # Zero-width spaces y joiners
         flags=re.UNICODE
     )
     texto_limpio = emoji_pattern.sub('', texto)
+    
+    # Elimina espacios dobles que puedan quedar tras borrar los caracteres
     return re.sub(r'\s+', ' ', texto_limpio).strip()
 
 def verificar_necesidad_legacy(hoy_str):
