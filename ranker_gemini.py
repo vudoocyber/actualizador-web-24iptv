@@ -25,6 +25,7 @@ FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
 RUTA_REMOTA_FTP = "/public_html/"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY') # NUEVA LLAVE DE RESPALDO
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
 # Configuración de Variedad
@@ -82,33 +83,60 @@ def verificar_necesidad_legacy(hoy_str):
         print(f" -> ❌ Error verificando Legacy: {e}. Se generará por seguridad.")
         return True
 
-# --- 3. FUNCIÓN PRINCIPAL GEMINI ---
-def obtener_ranking_eventos(lista_eventos):
-    if not GEMINI_API_KEY:
-        print(" -> ❌ ERROR: No Gemini API Key encontrada.")
-        return None
 
-    print(" -> 🧠 [3/5] Contactando a Gemini 2.0 Flash...")
+# --- 3. FUNCIONES DE IA (PRINCIPAL Y RESPALDO) ---
+
+def obtener_ranking_groq(prompt):
+    """Función de Respaldo que consulta a Groq (Llama 3) si Gemini falla."""
+    print(" -> 🛟 [PLAN B] Activando IA de respaldo: Groq (Llama 3)...")
+    if not GROQ_API_KEY:
+        print(" -> ❌ ERROR: No se encontró GROQ_API_KEY en los Secrets.")
+        return []
+        
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "llama3-70b-8192", 
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3
+    }
+    
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        cst_offset = timezone(timedelta(hours=-6))
-        hora_actual = datetime.now(cst_offset).strftime('%A, %d de %B - %I:%M %p (CDMX)')
-        
-        eventos_para_analizar = []
-        for evento in lista_eventos:
-            for partido in evento.get("partidos", []):
-                canales_str = ", ".join(partido.get('canales', []))
-                info = (f"LIGA: {evento.get('evento_principal', '')} | "
-                        f"PARTIDO: {partido.get('descripcion', '')} | "
-                        f"HORA: {partido.get('horarios', '')} | "
-                        f"CANALES: {canales_str}")
-                eventos_para_analizar.append(info.strip())
-        
-        lista_texto = "\n".join(eventos_para_analizar)
-        if not lista_texto: return []
+        resp = requests.post(url, headers=headers, json=data, timeout=30)
+        resp.raise_for_status()
+        respuesta_texto = resp.json()['choices'][0]['message']['content']
+        lineas = [linea.strip() for linea in respuesta_texto.strip().split('\n') if linea.strip()]
+        print(f" -> ✅ Groq procesó {len(lineas)} candidatos exitosamente.")
+        return lineas
+    except Exception as e:
+        print(f" -> ❌ Error fatal en Groq: {e}")
+        return []
 
-        prompt = f"""
- Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
+
+def obtener_ranking_eventos(lista_eventos):
+    print(" -> 🧠 [3/5] Contactando a Gemini 2.0 Flash...")
+    
+    cst_offset = timezone(timedelta(hours=-6))
+    hora_actual = datetime.now(cst_offset).strftime('%A, %d de %B - %I:%M %p (CDMX)')
+    
+    eventos_para_analizar = []
+    for evento in lista_eventos:
+        for partido in evento.get("partidos", []):
+            canales_str = ", ".join(partido.get('canales', []))
+            info = (f"LIGA: {evento.get('evento_principal', '')} | "
+                    f"PARTIDO: {partido.get('descripcion', '')} | "
+                    f"HORA: {partido.get('horarios', '')} | "
+                    f"CANALES: {canales_str}")
+            eventos_para_analizar.append(info.strip())
+    
+    lista_texto = "\n".join(eventos_para_analizar)
+    if not lista_texto: return []
+
+    prompt = f"""
+Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
 Contexto temporal: {hora_actual}.
 
@@ -130,12 +158,19 @@ SISTEMA DE SCORING:
 - Interés específico en México (0–15 pts)
 
 FORMATO DE SALIDA:
-Exactamente 40 líneas, sin numeración. Formato: "Equipo A vs Equipo B" o "Evento - Protagonista".
+Exactamente 40 líneas. Sin numeración ni explicaciones. 
+Formato: "Equipo A vs Equipo B" o "Evento - Protagonista".
 
 LISTA A ANALIZAR:
 {lista_texto}
-        """
+    """
 
+    if not GEMINI_API_KEY:
+        print(" -> ⚠️ No Gemini API Key. Saltando directo a Plan B...")
+        return obtener_ranking_groq(prompt)
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
             model='gemini-2.0-flash',
             contents=prompt,
@@ -144,13 +179,14 @@ LISTA A ANALIZAR:
         
         if response.text:
             lineas = [linea.strip() for linea in response.text.strip().split('\n') if linea.strip()]
-            print(f" -> ✅ IA procesó {len(lineas)} candidatos exitosamente.")
+            print(f" -> ✅ Gemini procesó {len(lineas)} candidatos exitosamente.")
             return lineas
         return []
 
     except Exception as e:
-        print(f" -> ❌ Error en Gemini: {e}")
-        return None
+        # AQUÍ OCURRE LA MAGIA DEL RESPALDO
+        print(f" -> ⚠️ Error en Gemini ({e}). Activando Plan B...")
+        return obtener_ranking_groq(prompt)
 
 # --- 4. FUNCIÓN PRINCIPAL ---
 def main():
@@ -191,7 +227,7 @@ def main():
     # Ranking IA
     ranking_ia = obtener_ranking_eventos(lista_original)
     if not ranking_ia:
-        print(" -> ❌ Error: No se obtuvo respuesta de la IA. Cancelando.")
+        print(" -> ❌ Error: Ninguna IA pudo procesar los datos. Cancelando.")
         return
 
     print(f"--- 🚩 [4/5] Generación de Archivos JSON Locales ---")
@@ -225,7 +261,8 @@ def main():
 
     # B. ROKU (Top 20 Limpio)
     top_20_roku = []
-    for ev, pt, nom in eventos_seleccionados[:20]:
+    limit_roku = min(len(eventos_seleccionados), 20)
+    for ev, pt, nom in eventos_seleccionados[:limit_roku]:
         pt_clean = copy.deepcopy(pt)
         pt_clean["detalle_partido"] = limpiar_texto_roku(pt.get("detalle_partido", ""))
         pt_clean["descripcion"] = limpiar_texto_roku(pt.get("descripcion", ""))
@@ -240,14 +277,16 @@ def main():
     print(f" -> 💾 Generado: {ARCHIVO_ROKU}")
 
     # C. FIRE TV (Top 20 Emojis)
-    top_20_fire = [{"evento_principal": nom, "detalle_evento": ev.get("detalle_evento", ""), "partidos": [pt]} for ev, pt, nom in eventos_seleccionados[:20]]
+    limit_fire = min(len(eventos_seleccionados), 20)
+    top_20_fire = [{"evento_principal": nom, "detalle_evento": ev.get("detalle_evento", ""), "partidos": [pt]} for ev, pt, nom in eventos_seleccionados[:limit_fire]]
     with open(ARCHIVO_FIRE, 'w', encoding='utf-8') as f:
         json.dump({"fecha_actualizacion": fecha_iso, "fecha_guia": hoy_str, "eventos_relevantes": top_20_fire}, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_FIRE)
     print(f" -> 💾 Generado: {ARCHIVO_FIRE}")
 
     # D. WEB (Top Dinámico)
-    top_web = [{"evento_principal": nom, "detalle_evento": ev.get("detalle_evento", ""), "partidos": [pt]} for ev, pt, nom in eventos_seleccionados[:limit_web]]
+    limit_real_web = min(len(eventos_seleccionados), limit_web)
+    top_web = [{"evento_principal": nom, "detalle_evento": ev.get("detalle_evento", ""), "partidos": [pt]} for ev, pt, nom in eventos_seleccionados[:limit_real_web]]
     with open(ARCHIVO_WEB, 'w', encoding='utf-8') as f:
         json.dump({"fecha_actualizacion": fecha_iso, "fecha_guia": hoy_str, "eventos_relevantes": top_web}, f, indent=4, ensure_ascii=False)
     archivos_a_subir.append(ARCHIVO_WEB)
@@ -259,12 +298,10 @@ def main():
         return
 
     max_reintentos = 3
-    subida_exitosa = False
 
     for intento in range(1, max_reintentos + 1):
         try:
             print(f" -> 🚀 Conectando a FTP (Intento {intento}/{max_reintentos})...")
-            # Aplicamos timeout de 30 segundos
             with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA, timeout=30) as ftp:
                 ftp.set_pasv(True)
                 ftp.cwd(RUTA_REMOTA_FTP)
@@ -275,9 +312,8 @@ def main():
                         ftp.storbinary(f'STOR {archivo}', file)
                         print(f"    -> OK: {archivo}")
                 
-                subida_exitosa = True
                 print("--- 🏁 PROCESO FINALIZADO CON ÉXITO ---")
-                break # Rompe el bucle de reintentos si todo salió bien
+                break 
         
         except Exception as e:
             print(f" -> ⚠️ Error FTP en intento {intento}: {e}")
