@@ -44,19 +44,20 @@ HEADERS_SEGURIDAD = {
 # --- 2. FUNCIONES AUXILIARES ---
 
 def limpiar_texto_roku(texto):
-    """Elimina emojis, selectores de variación y caracteres especiales para Roku."""
+    """Elimina emojis, selectores de variación, tags y caracteres especiales para Roku."""
     if not texto:
         return ""
     
-    # Patrón extendido: ahora atrapa emojis, Variation Selectors y Zero-Width Joiners
+    # Patrón extendido: ahora atrapa también los "Tags" de banderas compuestas (Inglaterra, Escocia, etc.)
     emoji_pattern = re.compile(
         r'[\U0001F000-\U0001FAFF]'  # Emojis misceláneos y extendidos
         r'|[\U00002600-\U000027BF]' # Símbolos y pictogramas
         r'|[\U0001F300-\U0001F5FF]' # Símbolos varios
         r'|[\U0001F680-\U0001F6FF]' # Transporte y mapas
-        r'|[\U0001F1E0-\U0001F1FF]' # Banderas
+        r'|[\U0001F1E0-\U0001F1FF]' # Banderas Nacionales
+        r'|[\U000E0000-\U000E007F]' # Tags invisibles (El causante de la bandera de Inglaterra)
         r'|[\u2700-\u27BF]'         # Dingbats
-        r'|[\uFE00-\uFE0F]'         # Selectores de variación (El causante del cuadro)
+        r'|[\uFE00-\uFE0F]'         # Selectores de variación
         r'|[\u200B-\u200D]',        # Zero-width spaces y joiners
         flags=re.UNICODE
     )
