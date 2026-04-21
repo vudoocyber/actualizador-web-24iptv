@@ -87,8 +87,8 @@ def verificar_necesidad_legacy(hoy_str):
 # --- 3. FUNCIONES DE IA (PRINCIPAL Y RESPALDO) ---
 
 def obtener_ranking_groq(prompt):
-    """Función de Respaldo que consulta a Groq (Llama 3) si Gemini falla."""
-    print(" -> 🛟 [PLAN B] Activando IA de respaldo: Groq (Llama 3)...")
+    """Función de Respaldo que consulta a Groq (Llama 3.3) si Gemini falla."""
+    print(" -> 🛟 [PLAN B] Activando IA de respaldo: Groq (Llama 3.3)...")
     if not GROQ_API_KEY:
         print(" -> ❌ ERROR: No se encontró GROQ_API_KEY en los Secrets.")
         return []
@@ -99,7 +99,7 @@ def obtener_ranking_groq(prompt):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "llama3-70b-8192", 
+        "model": "llama-3.3-70b-versatile", # <-- MODELO ACTUALIZADO Y VALIDADO
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3
     }
