@@ -142,7 +142,8 @@ def obtener_ranking_eventos(lista_eventos):
     lista_texto = "\n".join(eventos_para_analizar)
     if not lista_texto: return []
 
-prompt = f"""
+    # <-- AQUÍ SE CORRIGIÓ LA SANGRÍA DEL PROMPT
+    prompt = f"""
 Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
 Contexto temporal: {hora_actual}.
@@ -269,7 +270,7 @@ Entregar solo la lista final.
 
 LISTA A ANALIZAR:
 {lista_texto}
-"""
+    """
 
     if not GEMINI_API_KEY:
         print(" -> ⚠️ No Gemini API Key. Saltando directo a Plan B...")
