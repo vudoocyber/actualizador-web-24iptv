@@ -142,7 +142,7 @@ def obtener_ranking_eventos(lista_eventos):
     lista_texto = "\n".join(eventos_para_analizar)
     if not lista_texto: return []
 
-    prompt = f"""
+prompt = f"""
 Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
 
 Contexto temporal: {hora_actual}.
@@ -154,23 +154,122 @@ REGLA CRÍTICA:
 La importancia del evento siempre supera la hora. Eventos nocturnos importantes deben incluirse aunque falten horas.
 
 ENFOQUE GEOGRÁFICO OBLIGATORIO (MÉXICO):
+
 Priorizar eventos con alto interés en México.
-Ligas sudamericanas (Argentina, Brasil, etc.) SOLO se incluyen si es final, semifinal o clásico internacional relevante.
+Ligas sudamericanas (Argentina, Brasil, etc.) SOLO se incluyen si:
+Es final
+Es semifinal
+Es clásico internacional relevante
 Partidos regulares de ligas sudamericanas deben ser descartados.
+Priorizar:
+Liga MX
+Selección Mexicana
+MLS (especialmente con mexicanos o equipos populares)
+NBA, NFL, MLB
+Champions League
+Eventos globales (F1, UFC, Boxeo, Tenis)
+
+METODOLOGÍA OBLIGATORIA:
+
+Analizar todos los eventos de la lista.
+Asignar un score de relevancia de 0 a 100 a cada evento.
+Aplicar filtro geográfico (México primero).
+Ordenarlos por score.
+Aplicar filtros de calidad.
+Seleccionar los mejores 40.
 
 SISTEMA DE SCORING:
-- Nivel del evento (0–40 pts)
-- Popularidad del deporte en México (0–25 pts)
-- Protagonistas (América, Chivas, Real Madrid, Lakers, etc.) (0–20 pts)
-- Interés específico en México (0–15 pts)
+
+Nivel del evento (0–40 pts):
+
+Final / Campeonato / PPV: +40
+Playoffs / Eliminación directa: +30
+Torneo internacional importante: +25
+Temporada regular: +10
+Partido irrelevante: +0
+
+Popularidad del deporte en México (0–25 pts):
+
+Fútbol (Liga MX / Champions / Selecciones): +25
+NBA / NFL: +25
+Ventos Especiales PPV (Conciertos, Peliculas, Pelea, o Partido): +30
+Boxeo / UFC / WWE (peleas relevantes,): +25
+F1: +25
+MLB: +20
+Tenis / Golf: +15
+Otros: +5
+
+Protagonistas (0–20 pts):
+
+Equipos o figuras élite relevantes en México (América, Chivas, Cruz Azul, Pumas, Tigres, Monterrey, Real Madrid, Barcelona, Lakers, Canelo, etc.): +20
+Equipos conocidos: +10
+Sin relevancia: +0
+
+Interés específico en México (0–15 pts):
+
+Muy alto interés nacional: +15
+Interés medio: +8
+Bajo o irrelevante: +0
+
+FILTRO GEOGRÁFICO OBLIGATORIO:
+
+Penalizar fuertemente (score máximo 20) a:
+Ligas sudamericanas en fase regular
+Equipos sin impacto en México
+Excluir completamente si no cumplen criterios mínimos.
+
+REGLAS DE EXCLUSIÓN:
+
+No incluir partidos sin impacto competitivo.
+No incluir ligas menores sin relevancia en México.
+No incluir exceso de fútbol sudamericano.
+No incluir equipos desconocidos.
+No incluir eventos con bajo interés en México.
+
+CONTROL DE DISTRIBUCIÓN:
+
+Máximo 12 eventos de fútbol.
+Mínimo 5 deportes diferentes.
+Máximo 3 eventos de ligas sudamericanas (y solo si son relevantes).
+Priorizar variedad con enfoque en gustos del público mexicano.
+
+PRIORIDAD ABSOLUTA:
+
+Liga MX (equipos grandes)
+Selección Mexicana
+NBA (equipos populares o partidos importantes)
+NFL (prime time o playoffs)
+Boxeo (especialmente peleadores mexicanos o eventos grandes)
+UFC
+F1
+Champions League (especialmente fases finales)
+
+REGLA DE TIEMPO:
+
+Solo excluir eventos que ya terminaron.
+Incluir eventos de todo el día.
 
 FORMATO DE SALIDA:
-Exactamente 40 líneas. Sin numeración ni explicaciones. 
-Formato: "Equipo A vs Equipo B" o "Evento - Protagonista".
+
+Exactamente 40 líneas.
+Sin numeración.
+Sin explicaciones.
+Formato por línea:
+"Equipo A vs Equipo B"
+o
+"Evento - Protagonista"
+
+IMPORTANTE:
+
+No inventar eventos.
+No repetir eventos.
+No agregar texto adicional.
+No explicar el razonamiento.
+Entregar solo la lista final.
 
 LISTA A ANALIZAR:
 {lista_texto}
-    """
+"""
 
     if not GEMINI_API_KEY:
         print(" -> ⚠️ No Gemini API Key. Saltando directo a Plan B...")
