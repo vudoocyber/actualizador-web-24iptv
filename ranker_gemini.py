@@ -144,17 +144,17 @@ def obtener_ranking_eventos(lista_eventos):
 
     # <-- AQUÍ SE CORRIGIÓ LA SANGRÍA DEL PROMPT
     prompt = f"""
-Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado EXCLUSIVAMENTE en audiencias de México, con enfoque en contenido premium y de alto interés (clase media-alta y alta).
+Rol: Eres un curador experto en deportes para TV y plataformas digitales, especializado eventos deportivos en audiencias con orden de prioridad de México, USA, Centro America, España, Canada, con enfoque en contenido premium y de alto interés (clase media, media-alta y alta).
 
 Contexto temporal: {hora_actual}.
 
 OBJETIVO:
-Analizar una lista de eventos y seleccionar los 40 eventos más importantes del día completo, optimizados específicamente para el público de México, ordenados estrictamente por relevancia real, no por horario.
+Analizar la siguiente lista de eventos y seleccionar los 40 eventos deportivos más relevantes del día completo, optimizados específicamente para el público de los paises que te indique, ordenados estrictamente por relevancia real, no por horario.
 
 REGLA CRÍTICA:
-La importancia del evento siempre supera la hora. Eventos nocturnos importantes deben incluirse aunque falten horas.
+La importancia del evento siempre supera la hora. Eventos nocturnos importantes deben incluirse aunque falten horas, asi como los que se transmitiran en canales PPV.
 
-ENFOQUE GEOGRÁFICO OBLIGATORIO (MÉXICO):
+ENFOQUE GEOGRÁFICO OBLIGATORIO (Los paises indicados pero la udioencia principal MÉXICO):
 
 Priorizar eventos con alto interés en México.
 Ligas sudamericanas (Argentina, Brasil, etc.) SOLO se incluyen si:
@@ -232,10 +232,11 @@ CONTROL DE DISTRIBUCIÓN:
 Máximo 12 eventos de fútbol.
 Mínimo 5 deportes diferentes.
 Máximo 3 eventos de ligas sudamericanas (y solo si son relevantes).
-Priorizar variedad con enfoque en gustos del público mexicano.
+Priorizar variedad con enfoque en gustos del público mexicano poner eventos intercalados no puede haver mas de 5 eventos de un mismo deporte de manera consecutiva.
 
 PRIORIDAD ABSOLUTA:
 
+Mundial de Futbol
 Liga MX (equipos grandes)
 Selección Mexicana
 NBA (equipos populares o partidos importantes)
@@ -267,6 +268,7 @@ No repetir eventos.
 No agregar texto adicional.
 No explicar el razonamiento.
 Entregar solo la lista final.
+
 
 LISTA A ANALIZAR:
 {lista_texto}
