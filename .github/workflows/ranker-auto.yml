@@ -2,8 +2,9 @@ name: Ranqueo Eventos Relevantes Gemini
 
 on:
   schedule:
-    # Cronograma estratégico: 6pm, 9pm, 4am, 7am, 10am, 2pm (Horas CDMX convertidas a UTC)
-    - cron: '0 0,3,10,13,16,20 * * *'
+    # Cronograma estratégico desfasado al minuto 17 para evitar tráfico de GitHub
+    # Ejecuciones aprox: 6:17pm, 9:17pm, 4:17am, 7:17am, 10:17am, 2:17pm (CDMX)
+    - cron: '17 0,3,10,13,16,20 * * *'
   workflow_dispatch:
 
 # --- CAMBIO: Variable para eliminar la advertencia de Node.js 20 ---
