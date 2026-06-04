@@ -11,6 +11,7 @@ URL_FUENTE = os.getenv('URL_FUENTE')
 FTP_HOST = os.getenv('FTP_HOST')
 FTP_USUARIO = os.getenv('FTP_USUARIO')
 FTP_CONTRASENA = os.getenv('FTP_CONTRASENA')
+FTP_PUERTO = int(os.getenv('FTP_PUERTO', '21'))
 RUTA_REMOTA_FTP = "/public_html/"
 NOMBRE_ARCHIVO_JSON = 'events.json'
 NOMBRE_ARCHIVO_PROGRAMACION = os.getenv('NOMBRE_ARCHIVO_PROGRAMACION', 'programacion.html')
@@ -103,17 +104,14 @@ def generar_archivo_telegram_txt(mensaje_texto_puro):
 
 # --- 5. FUNCIÓN SIMULADA (RANKING VACÍO) ---
 def obtener_ranking_eventos(texto_crudo):
-    # La lógica de ranking ahora se maneja en un script separado (ranker.yml / ranker_gemini.py)
     return []
 
-# --- 6. FUNCIÓN JSON (CON NUEVA ETIQUETA `fecha_guia`) ---
+# --- 6. FUNCIÓN JSON ---
 def crear_json_eventos(texto_crudo, ranking_relevancia):
-    
     meses_es = {
         "enero": "01", "febrero": "02", "marzo": "03", "abril": "04", "mayo": "05", "junio": "06",
         "julio": "07", "agosto": "08", "septiembre": "09", "octubre": "10", "noviembre": "11", "diciembre": "12"
     }
-    
     REGEX_EMOJI = re.compile(r'[\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BF]+', re.UNICODE)
 
     def es_linea_de_titulo(linea):
@@ -284,14 +282,19 @@ def main():
     
     print("4. Subiendo archivos al servidor FTP...")
     try:
-        with FTP(FTP_HOST, FTP_USUARIO, FTP_CONTRASENA) as ftp:
-            ftp.set_pasv(True)
-            ftp.cwd(RUTA_REMOTA_FTP)
-            for nombre_archivo in archivos_a_subir:
-                with open(nombre_archivo, 'rb') as file:
-                    print(f"Subiendo '{nombre_archivo}'...")
-                    ftp.storbinary(f'STOR {nombre_archivo}', file)
-            print("¡Subida de todos los archivos completada exitosamente!")
+        ftp = FTP()
+        ftp.connect(FTP_HOST, FTP_PUERTO)
+        ftp.login(FTP_USUARIO, FTP_CONTRASENA)
+        
+        ftp.set_pasv(True)
+        ftp.cwd(RUTA_REMOTA_FTP)
+        for nombre_archivo in archivos_a_subir:
+            with open(nombre_archivo, 'rb') as file:
+                print(f"Subiendo '{nombre_archivo}'...")
+                ftp.storbinary(f'STOR {nombre_archivo}', file)
+                
+        ftp.quit()
+        print("¡Subida de todos los archivos completada exitosamente!")
     except Exception as e:
         print(f"ERROR FATAL durante la subida por FTP: {e}")
         # --- fin ---
